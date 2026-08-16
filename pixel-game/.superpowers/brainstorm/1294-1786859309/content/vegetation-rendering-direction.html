@@ -1,0 +1,55 @@
+<style>
+  .visual-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:18px; }
+  .visual-card { cursor:pointer; overflow:hidden; }
+  .scene { position:relative; height:250px; overflow:hidden; background:#0d0b0a; border-bottom:1px solid #332f28; }
+  .island { position:absolute; left:50%; top:58%; width:210px; height:130px; transform:translate(-50%,-50%) rotate(30deg) skewY(-10deg); background:#82964b; box-shadow:14px 18px 0 #453d26; }
+  .tile { position:absolute; width:30px; height:22px; transform:rotate(30deg) skewY(-10deg); background:#b7c75c; box-shadow:4px 5px 0 #506337; }
+  .tree { position:absolute; left:50%; top:23%; width:100px; height:164px; transform:translateX(-50%); }
+  .trunk { position:absolute; left:44px; bottom:8px; width:14px; height:58px; background:#9b704c; box-shadow:8px 0 #60472e; }
+  .layer { position:absolute; left:50%; height:15px; transform:translateX(-50%) rotate(1deg); background:#829d48; box-shadow:7px 7px 0 #425f32; }
+  .layer:nth-child(2){bottom:56px;width:90px}.layer:nth-child(3){bottom:78px;width:72px}.layer:nth-child(4){bottom:100px;width:54px}.layer:nth-child(5){bottom:122px;width:35px}.layer:nth-child(6){bottom:144px;width:16px;background:#d3db61}
+  .bush { position:absolute; width:38px; height:24px; background:#6f9142; box-shadow:6px 5px 0 #355337; }
+  .sprite-grass { position:absolute; color:#d6df67; font:700 28px/1 monospace; text-shadow:4px 4px #3b5835; }
+  .billboard { position:absolute; left:50%; top:22%; width:112px; height:168px; transform:translateX(-50%); clip-path:polygon(50% 0,66% 28%,58% 28%,77% 56%,65% 56%,91% 89%,58% 89%,58% 100%,43% 100%,43% 89%,10% 89%,36% 56%,24% 56%,43% 28%,35% 28%); background:linear-gradient(90deg,#46673c 0 48%,#8ba34c 48% 100%); filter:drop-shadow(12px 12px 0 #221d17); }
+  .sprite-shadow { position:absolute; left:50%; bottom:34px; width:115px; height:34px; transform:translateX(-35%) rotate(20deg); background:#25261a; opacity:.8; }
+  .chip { position:absolute; left:10px; top:10px; padding:5px 8px; border:1px solid #b8b368; background:#12110e; color:#f1eda4; font:700 11px monospace; }
+  @media (max-width:900px){.visual-grid{grid-template-columns:1fr}.scene{height:220px}}
+</style>
+
+<h2>¿Qué mezcla visual debe guiar el bosque?</h2>
+<p class="subtitle">La cámara seguirá siendo isométrica. Elige pensando en volumen, sombras y riqueza del suelo.</p>
+
+<div class="cards visual-grid">
+  <div class="card visual-card" data-choice="a-3d-puro" onclick="toggleSelect(this)">
+    <div class="card-image scene">
+      <div class="chip">A · 3D PURO</div>
+      <div class="island"></div>
+      <div class="tree"><div class="trunk"></div><div class="layer"></div><div class="layer"></div><div class="layer"></div><div class="layer"></div><div class="layer"></div></div>
+    </div>
+    <div class="card-body"><h3>Volumen completo</h3><p>Árboles, arbustos y suelo hechos con geometrías. Sombras excelentes, pero más instancias y menos detalle fino.</p></div>
+  </div>
+
+  <div class="card visual-card" data-choice="b-hibrido" onclick="toggleSelect(this)">
+    <div class="card-image scene">
+      <div class="chip">B · HÍBRIDO</div>
+      <div class="island"></div>
+      <div class="tile" style="left:32px;bottom:38px;background:#d7ca76"></div>
+      <div class="tile" style="right:34px;bottom:62px;background:#70a17b"></div>
+      <div class="bush" style="left:32px;bottom:64px"></div><div class="bush" style="right:34px;bottom:45px;background:#a5b653"></div>
+      <div class="sprite-grass" style="left:24%;bottom:25px">////</div><div class="sprite-grass" style="right:14%;bottom:75px;color:#e39a66">///</div>
+      <div class="tree"><div class="trunk"></div><div class="layer"></div><div class="layer"></div><div class="layer"></div><div class="layer"></div><div class="layer"></div></div>
+    </div>
+    <div class="card-body"><h3>3D + sprites de detalle</h3><p>Árboles y arbustos conservan volumen; sprites se usan como decals, hierba, flores y efectos. Es mi recomendación.</p></div>
+  </div>
+
+  <div class="card visual-card" data-choice="c-sprites" onclick="toggleSelect(this)">
+    <div class="card-image scene">
+      <div class="chip">C · SPRITES</div>
+      <div class="island" style="filter:saturate(.8)"></div>
+      <div class="sprite-shadow"></div>
+      <div class="billboard"></div>
+      <div class="sprite-grass" style="left:23%;bottom:40px">////</div>
+    </div>
+    <div class="card-body"><h3>Billboards dominantes</h3><p>Permite poblar mapas enormes con rapidez, pero la luz y la profundidad se vuelven más planas y frágiles.</p></div>
+  </div>
+</div>
