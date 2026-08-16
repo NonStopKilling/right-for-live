@@ -12,6 +12,10 @@ let game = null;
 if (isWebGLAvailable()) {
   game = new Game(app);
   game.start();
+
+  if (import.meta.env.DEV) {
+    window.__VOXEL_GAME__ = game;
+  }
 } else {
   renderWebGLError(app);
 }
@@ -19,6 +23,7 @@ if (isWebGLAvailable()) {
 if (import.meta.hot) {
   import.meta.hot.dispose(() => {
     game?.dispose();
+    delete window.__VOXEL_GAME__;
   });
 }
 

@@ -1,275 +1,349 @@
 import * as THREE from 'three';
-import { COLORS, WORLD, hash2D } from '../utils/constants.js';
+import { WORLD, hash2D, valueNoise2D } from '../utils/constants.js';
 
 const MATRIX = new THREE.Matrix4();
 const COLOR = new THREE.Color();
 const QUATERNION = new THREE.Quaternion();
+const Y_AXIS = new THREE.Vector3(0, 1, 0);
+const POSITION = new THREE.Vector3();
+const SCALE = new THREE.Vector3();
+
+const TREE_VARIANTS = {
+  spire: {
+    trunkHeight: 0.68,
+    trunkWidth: 0.15,
+    layers: 7,
+    baseWidth: 1.12,
+    tipWidth: 0.13,
+    crownY: 0.56,
+    step: 0.43,
+    slabHeight: 0.16,
+    taperPower: 1.08
+  },
+  needle: {
+    trunkHeight: 0.7,
+    trunkWidth: 0.13,
+    layers: 5,
+    baseWidth: 0.76,
+    tipWidth: 0.1,
+    crownY: 0.57,
+    step: 0.57,
+    slabHeight: 0.18,
+    taperPower: 1
+  },
+  broad: {
+    trunkHeight: 1.15,
+    trunkWidth: 0.23,
+    layers: 6,
+    widths: [1.24, 1.58, 1.4, 1.08, 0.7, 0.34],
+    crownY: 1.02,
+    step: 0.27,
+    slabHeight: 0.18
+  },
+  sapling: {
+    trunkHeight: 0.4,
+    trunkWidth: 0.1,
+    layers: 3,
+    baseWidth: 0.54,
+    tipWidth: 0.12,
+    crownY: 0.34,
+    step: 0.31,
+    slabHeight: 0.15,
+    taperPower: 1
+  }
+};
 
 export class TreeSystem {
-  constructor(terrain) {
+  constructor(terrain, profile) {
     this.terrain = terrain;
-    this.group = new THREE.Group();
-    this.group.name = 'TreeSystem';
-    this.trees = this.generateTrees();
-    this.buildMeshes();
-  }
-
-  generateTrees() {
-    const trees = [];
-
-    for (const cell of this.terrain.cells.values()) {
-      const distanceFromCenter = Math.hypot(cell.gx, cell.gz);
-      const edge = Math.max(Math.abs(cell.gx), Math.abs(cell.gz));
-      const density = hash2D(cell.gx, cell.gz, WORLD.seed + 701);
-
-      if (cell.kind !== 'grass' || distanceFromCenter < 9 || edge > 26 || density < 0.81) {
-        continue;
-      }
-
-      const variety = hash2D(cell.gx, cell.gz, WORLD.seed + 911);
-      const height = 11 + Math.floor(variety * 10);
-      const colorPatch = hash2D(Math.floor(cell.gx / 5), Math.floor(cell.gz / 5), WORLD.seed + 1001);
-      const tone = hash2D(cell.gx, cell.gz, WORLD.seed + 1001);
-      const palette = this.resolvePalette(tone, colorPatch, cell.gx, cell.gz);
-
-      trees.push({
-        gx: cell.gx,
-        gz: cell.gz,
-        baseY: cell.level * WORLD.blockHeight,
-        height,
-        width: 0.54 + variety * 0.68,
-        rotation: Math.round(variety * 3) * (Math.PI / 2),
-        palette: palette.type,
-        color: palette.color,
-        shade: palette.shade,
-        highlight: palette.highlight
-      });
-    }
-
-    return trees.slice(0, 168);
-  }
-
-  resolvePalette(tone, colorPatch, gx, gz) {
-    const ridgeBias = Math.sin(gx * 0.32 + gz * 0.19) * 0.16;
-    const signal = Math.max(0, Math.min(1, tone * 0.56 + colorPatch * 0.52 + ridgeBias));
-
-    if (signal > 0.68 || (gx < -9 && colorPatch > 0.42)) {
-      return {
-        type: 'dry',
-        color: COLORS.dryNeedles,
-        shade: 0xb05b49,
-        highlight: 0xffb16b
-      };
-    }
-
-    if (signal > 0.48 || (gz > 10 && colorPatch > 0.44)) {
-      return {
-        type: 'amber',
-        color: COLORS.amberNeedles,
-        shade: 0xb77945,
-        highlight: COLORS.evergreenLight
-      };
-    }
-
-    if (signal > 0.25) {
-      return {
-        type: 'lime',
-        color: COLORS.limeNeedles,
-        shade: COLORS.grassDark,
-        highlight: COLORS.evergreenLight
-      };
-    }
-
-    if (signal < 0.16) {
-      return {
-        type: 'blue',
-        color: COLORS.evergreenBlue,
-        shade: COLORS.evergreenBlue,
-        highlight: COLORS.stoneCool
-      };
-    }
-
-    return {
-      type: 'green',
-      color: COLORS.evergreen,
-      shade: COLORS.grassDark,
-      highlight: COLORS.limeNeedles
+    this.profile = profile;
+    this.geometry = new THREE.BoxGeometry(1, 1, 1);
+    this.materials = {
+      trunk: new THREE.MeshStandardMaterial({
+        color: 0xffffff,
+        roughness: 0.94,
+        metalness: 0,
+        flatShading: true
+      }),
+      foliage: new THREE.MeshStandardMaterial({
+        color: 0xffffff,
+        roughness: 0.78,
+        metalness: 0,
+        flatShading: true
+      }),
+      cap: new THREE.MeshBasicMaterial({
+        color: 0xffffff,
+        toneMapped: false
+      })
     };
   }
 
-  buildMeshes() {
-    this.buildTrunks();
-    this.buildCanopyLayers();
-    this.buildCanopyHighlights();
+  createChunkGroup(cells, chunkKey, depletedResources = new Set()) {
+    const group = new THREE.Group();
+    group.name = `VegetationChunk-${chunkKey}`;
+    const trunks = [];
+    const foliage = [];
+    const caps = [];
+
+    for (const cell of cells) {
+      const isTree = this.shouldPlaceTree(cell);
+
+      if (isTree) {
+        if (!depletedResources.has(this.getResourceId(cell))) {
+          this.addTreeRecipe(cell, trunks, foliage, caps);
+        }
+      } else if (this.shouldPlaceBush(cell)) {
+        this.addBushRecipe(cell, foliage, caps);
+      }
+    }
+
+    const trunkMesh = this.createMesh('TreeTrunks', trunks, this.materials.trunk, true);
+    const foliageMesh = this.createMesh('TreeCanopiesAndBushes', foliage, this.materials.foliage, true);
+    const capMesh = this.createMesh('VegetationColorCaps', caps, this.materials.cap, false);
+
+    if (trunkMesh) {
+      group.add(trunkMesh);
+    }
+
+    if (foliageMesh) {
+      group.add(foliageMesh);
+    }
+
+    if (capMesh) {
+      capMesh.receiveShadow = false;
+      group.add(capMesh);
+    }
+
+    return group;
   }
 
-  buildTrunks() {
-    const geometry = new THREE.BoxGeometry(1, 1, 1);
-    const material = new THREE.MeshLambertMaterial({
-      color: COLORS.trunk,
-      emissive: 0x3d2a18,
-      emissiveIntensity: 0.72,
-      flatShading: true
+  getResourceNodes(cells) {
+    return cells.filter((cell) => this.shouldPlaceTree(cell)).map((cell) => {
+      const { x, z } = this.terrain.gridToWorld(cell.gx, cell.gz);
+      return {
+        id: this.getResourceId(cell),
+        type: 'wood',
+        layer: 'vegetation',
+        label: 'MADERA',
+        gx: cell.gx,
+        gz: cell.gz,
+        x,
+        y: cell.level * WORLD.blockHeight,
+        z
+      };
     });
-    const mesh = new THREE.InstancedMesh(geometry, material, this.trees.length);
-    mesh.name = 'TreeTrunks';
-    mesh.castShadow = true;
+  }
+
+  getResourceId(cell) {
+    return `wood:${cell.gx}:${cell.gz}`;
+  }
+
+  shouldPlaceTree(cell) {
+    if (cell.surface !== 'meadow' && cell.surface !== 'moss' && cell.surface !== 'soil') {
+      return false;
+    }
+
+    if (Math.hypot(cell.gx, cell.gz) < WORLD.originClearRadius + 1.5 || this.hasNearbyTrail(cell.gx, cell.gz)) {
+      return false;
+    }
+
+    const density = hash2D(cell.gx, cell.gz, WORLD.seed + 701);
+    const distanceFromOrigin = Math.hypot(cell.gx, cell.gz);
+    const clearingRingBias = distanceFromOrigin < 24 ? 0.12 : 0;
+    const surfaceThreshold = cell.surface === 'moss' ? 0.42 : cell.surface === 'soil' ? 0.5 : 0.49;
+    const forestThreshold = surfaceThreshold - clearingRingBias;
+
+    if (cell.forest < forestThreshold || density < 0.58) {
+      return false;
+    }
+
+    for (let offsetZ = -1; offsetZ <= 1; offsetZ += 1) {
+      for (let offsetX = -1; offsetX <= 1; offsetX += 1) {
+        if (offsetX === 0 && offsetZ === 0) {
+          continue;
+        }
+
+        if (hash2D(cell.gx + offsetX, cell.gz + offsetZ, WORLD.seed + 701) > density) {
+          return false;
+        }
+      }
+    }
+
+    return true;
+  }
+
+  shouldPlaceBush(cell) {
+    if (cell.surface !== 'meadow' && cell.surface !== 'moss') {
+      return false;
+    }
+
+    if (Math.hypot(cell.gx, cell.gz) < WORLD.originClearRadius || this.terrain.isTrail(cell.gx, cell.gz)) {
+      return false;
+    }
+
+    return hash2D(cell.gx, cell.gz, WORLD.seed + 773) > 0.965;
+  }
+
+  hasNearbyTrail(gx, gz) {
+    return (
+      this.terrain.isTrail(gx, gz) ||
+      this.terrain.isTrail(gx + 1, gz) ||
+      this.terrain.isTrail(gx - 1, gz) ||
+      this.terrain.isTrail(gx, gz + 1) ||
+      this.terrain.isTrail(gx, gz - 1)
+    );
+  }
+
+  addTreeRecipe(cell, trunks, foliage, caps) {
+    const variety = hash2D(cell.gx, cell.gz, WORLD.seed + 811);
+    const variantName = this.resolveVariant(variety, cell.forest);
+    const variant = TREE_VARIANTS[variantName];
+    const heightScale = 0.88 + hash2D(cell.gx, cell.gz, WORLD.seed + 823) * 0.5;
+    const widthScale = 0.86 + hash2D(cell.gz, cell.gx, WORLD.seed + 829) * 0.3;
+    const rotation = Math.floor(variety * 8) * (Math.PI / 4);
+    const baseY = cell.level * WORLD.blockHeight;
+    const { x, z } = this.terrain.gridToWorld(cell.gx, cell.gz);
+    const palette = this.resolveTreePalette(cell.gx, cell.gz);
+    const trunkColor = this.resolveFamilyColor('trunk', cell.gx, cell.gz, 839);
+
+    trunks.push({
+      x,
+      y: baseY + (variant.trunkHeight * heightScale) / 2,
+      z,
+      rotation,
+      scaleX: variant.trunkWidth * widthScale,
+      scaleY: variant.trunkHeight * heightScale,
+      scaleZ: variant.trunkWidth * widthScale,
+      color: trunkColor
+    });
+
+    for (let layer = 0; layer < variant.layers; layer += 1) {
+      const normalized = layer / Math.max(1, variant.layers - 1);
+      const width = variant.widths
+        ? variant.widths[layer] * widthScale
+        : this.resolveTaperedWidth(variant, normalized) * widthScale;
+      const color = layer === variant.layers - 1
+        ? palette.tip
+        : layer === 0
+          ? palette.shade
+          : palette.base;
+      const band = layer % 2 === 0 ? 1.04 : 0.96;
+
+      const block = {
+        x,
+        y: baseY + (variant.crownY + layer * variant.step) * heightScale,
+        z,
+        rotation,
+        scaleX: width,
+        scaleY: variant.slabHeight * heightScale,
+        scaleZ: width,
+        color: COLOR.setHex(color).multiplyScalar(band).getHex()
+      };
+      foliage.push(block);
+      caps.push({
+        ...block,
+        y: block.y + block.scaleY / 2 + 0.009,
+        scaleX: block.scaleX * 0.88,
+        scaleY: 0.014,
+        scaleZ: block.scaleZ * 0.88,
+        color: COLOR.setHex(color).multiplyScalar(0.96 + normalized * 0.08).getHex()
+      });
+    }
+  }
+
+  addBushRecipe(cell, foliage, caps) {
+    const noise = hash2D(cell.gx, cell.gz, WORLD.seed + 887);
+    const blocks = noise > 0.68 ? 3 : noise > 0.34 ? 2 : 1;
+    const palette = this.resolveTreePalette(cell.gx, cell.gz);
+    const baseY = cell.level * WORLD.blockHeight;
+    const { x, z } = this.terrain.gridToWorld(cell.gx, cell.gz);
+
+    for (let index = 0; index < blocks; index += 1) {
+      const angle = noise * Math.PI * 2 + index * 2.2;
+      const offset = index === 0 ? 0 : 0.18;
+      const width = (0.42 - index * 0.055) * (0.88 + noise * 0.28);
+
+      const block = {
+        x: x + Math.cos(angle) * offset,
+        y: baseY + 0.16 + index * 0.075,
+        z: z + Math.sin(angle) * offset,
+        rotation: angle,
+        scaleX: width,
+        scaleY: 0.24,
+        scaleZ: width * 0.82,
+        color: index === blocks - 1 ? palette.tip : palette.base
+      };
+      foliage.push(block);
+      caps.push({
+        ...block,
+        y: block.y + block.scaleY / 2 + 0.009,
+        scaleX: block.scaleX * 0.86,
+        scaleY: 0.014,
+        scaleZ: block.scaleZ * 0.86
+      });
+    }
+  }
+
+  resolveVariant(variety, forest) {
+    if (variety > 0.79) {
+      return 'broad';
+    }
+
+    if (variety > 0.49) {
+      return forest > 0.67 ? 'spire' : 'needle';
+    }
+
+    if (variety < 0.17) {
+      return 'sapling';
+    }
+
+    return 'spire';
+  }
+
+  resolveTaperedWidth(variant, normalized) {
+    const tapered = Math.pow(normalized, variant.taperPower);
+    return variant.baseWidth + (variant.tipWidth - variant.baseWidth) * tapered;
+  }
+
+  resolveTreePalette(gx, gz) {
+    const region = valueNoise2D(gx, gz, 15, WORLD.seed + 907);
+    const index = Math.min(this.profile.treePalettes.length - 1, Math.floor(region * this.profile.treePalettes.length));
+    return this.profile.treePalettes[index];
+  }
+
+  resolveFamilyColor(family, gx, gz, seedOffset) {
+    const palette = this.profile.palette[family];
+    const noise = hash2D(gx, gz, WORLD.seed + seedOffset);
+    return palette[Math.min(palette.length - 1, Math.floor(noise * palette.length))];
+  }
+
+  createMesh(name, blocks, material, castsShadow) {
+    if (blocks.length === 0) {
+      return null;
+    }
+
+    const mesh = new THREE.InstancedMesh(this.geometry, material, blocks.length);
+    mesh.name = name;
+    mesh.castShadow = castsShadow;
     mesh.receiveShadow = true;
 
-    this.trees.forEach((tree, index) => {
-      const { x, z } = this.terrain.gridToWorld(tree.gx, tree.gz);
-      MATRIX.compose(
-        new THREE.Vector3(x, tree.baseY + 0.3, z),
-        QUATERNION,
-        new THREE.Vector3(0.14, 0.62, 0.14)
-      );
+    blocks.forEach((block, index) => {
+      POSITION.set(block.x, block.y, block.z);
+      QUATERNION.setFromAxisAngle(Y_AXIS, block.rotation);
+      SCALE.set(block.scaleX, block.scaleY, block.scaleZ);
+      MATRIX.compose(POSITION, QUATERNION, SCALE);
       mesh.setMatrixAt(index, MATRIX);
+      mesh.setColorAt(index, COLOR.setHex(block.color));
     });
 
     mesh.instanceMatrix.needsUpdate = true;
-    this.group.add(mesh);
-  }
-
-  buildCanopyLayers() {
-    const maxLayers = Math.max(...this.trees.map((tree) => tree.height));
-    const treesByPalette = this.groupTreesByPalette();
-
-    for (let layer = 0; layer < maxLayers; layer += 1) {
-      for (const [palette, trees] of treesByPalette) {
-        const geometry = new THREE.BoxGeometry(1, 1, 1);
-        const material = new THREE.MeshLambertMaterial({
-          color: 0xffffff,
-          emissive: this.resolvePaletteEmission(palette),
-          emissiveIntensity: 0.72,
-          flatShading: true,
-          vertexColors: true
-        });
-        const mesh = new THREE.InstancedMesh(geometry, material, trees.length);
-        mesh.name = `CanopyLayer${layer + 1}-${palette}`;
-        mesh.castShadow = true;
-        mesh.receiveShadow = true;
-
-        trees.forEach((tree, index) => {
-          const { x, z } = this.terrain.gridToWorld(tree.gx, tree.gz);
-
-          if (layer >= tree.height) {
-            MATRIX.makeScale(0, 0, 0);
-            mesh.setMatrixAt(index, MATRIX);
-            mesh.setColorAt(index, COLOR.setHex(tree.color));
-            return;
-          }
-
-          const normalized = layer / Math.max(1, tree.height - 1);
-          const width = tree.width * (1 - normalized * 0.9);
-          const layerHeight = 0.13;
-          const y = tree.baseY + 0.5 + layer * 0.27;
-
-          QUATERNION.setFromAxisAngle(new THREE.Vector3(0, 1, 0), tree.rotation);
-          MATRIX.compose(
-            new THREE.Vector3(x, y, z),
-            QUATERNION,
-            new THREE.Vector3(Math.max(0.08, width), layerHeight, Math.max(0.08, width))
-          );
-          mesh.setMatrixAt(index, MATRIX);
-
-          const color = layer > tree.height * 0.72 ? tree.highlight : layer < 3 ? tree.shade : tree.color;
-          const band = layer % 2 === 0 ? 1.18 : 0.9;
-          const crownLight = layer > tree.height * 0.58 ? 1.18 : 1.06;
-          mesh.setColorAt(index, COLOR.setHex(color).multiplyScalar((1.1 + normalized * 0.32) * band * crownLight));
-        });
-
-        mesh.instanceMatrix.needsUpdate = true;
-        mesh.instanceColor.needsUpdate = true;
-        this.group.add(mesh);
-      }
-    }
-  }
-
-  groupTreesByPalette() {
-    const groups = new Map();
-
-    this.trees.forEach((tree) => {
-      if (!groups.has(tree.palette)) {
-        groups.set(tree.palette, []);
-      }
-
-      groups.get(tree.palette).push(tree);
-    });
-
-    return groups;
-  }
-
-  resolvePaletteEmission(palette) {
-    return {
-      dry: 0x673329,
-      amber: 0x6b4d26,
-      lime: 0x53662b,
-      blue: 0x2e5547,
-      green: 0x3f5427
-    }[palette] ?? 0x3f5427;
-  }
-
-  buildCanopyHighlights() {
-    const maxLayers = Math.max(...this.trees.map((tree) => tree.height));
-
-    for (let layer = 0; layer < maxLayers; layer += 1) {
-      if (layer % 2 !== 0) {
-        continue;
-      }
-
-      const geometry = new THREE.BoxGeometry(1, 1, 1);
-      const material = new THREE.MeshBasicMaterial({
-        color: 0xffffff,
-        vertexColors: true,
-        transparent: true,
-        opacity: 0.72,
-        depthWrite: false,
-        fog: false
-      });
-      const mesh = new THREE.InstancedMesh(geometry, material, this.trees.length);
-      mesh.name = `CanopyHighlight${layer + 1}`;
-
-      this.trees.forEach((tree, index) => {
-        const { x, z } = this.terrain.gridToWorld(tree.gx, tree.gz);
-
-        if (layer >= tree.height) {
-          MATRIX.makeScale(0, 0, 0);
-          mesh.setMatrixAt(index, MATRIX);
-          return;
-        }
-
-        const normalized = layer / Math.max(1, tree.height - 1);
-        const width = Math.max(0.08, tree.width * (1 - normalized * 0.9));
-        const y = tree.baseY + 0.5 + layer * 0.27 + 0.076;
-
-        QUATERNION.setFromAxisAngle(new THREE.Vector3(0, 1, 0), tree.rotation);
-        MATRIX.compose(
-          new THREE.Vector3(x, y, z),
-          QUATERNION,
-          new THREE.Vector3(width * 0.88, 0.018, width * 0.88)
-        );
-        mesh.setMatrixAt(index, MATRIX);
-
-        const topColor = layer > tree.height * 0.72 ? tree.highlight : tree.color;
-        mesh.setColorAt(index, COLOR.setHex(topColor).multiplyScalar(1.32 + normalized * 0.34));
-      });
-
-      mesh.instanceMatrix.needsUpdate = true;
-      mesh.instanceColor.needsUpdate = true;
-      this.group.add(mesh);
-    }
+    mesh.instanceColor.needsUpdate = true;
+    mesh.computeBoundingSphere();
+    return mesh;
   }
 
   dispose() {
-    this.group.traverse((object) => {
-      object.geometry?.dispose();
-
-      if (Array.isArray(object.material)) {
-        object.material.forEach((material) => material.dispose());
-      } else {
-        object.material?.dispose();
-      }
-    });
-    this.group.clear();
+    this.geometry.dispose();
+    Object.values(this.materials).forEach((material) => material.dispose());
   }
 }

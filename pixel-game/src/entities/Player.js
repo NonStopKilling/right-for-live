@@ -1,73 +1,108 @@
 import * as THREE from 'three';
 import { COLORS, PLAYER, damping } from '../utils/constants.js';
+import { GAMEPLAY } from '../config/gameplay.js';
 
 const SCREEN_FORWARD = new THREE.Vector3(-1, 0, -1).normalize();
 const SCREEN_RIGHT = new THREE.Vector3(1, 0, -1).normalize();
 const MOVE = new THREE.Vector3();
 
 export class Player {
-  constructor(spawnPoint) {
+  constructor(spawnPoint, profile) {
+    this.profile = profile;
     this.group = new THREE.Group();
     this.group.name = 'Player';
     this.position = this.group.position;
     this.position.copy(spawnPoint);
-    this.position.y += 0.04;
+    this.position.y += 0.025;
+    this.walkTime = 0;
+    this.maxHealth = GAMEPLAY.player.maxHealth;
+    this.health = this.maxHealth;
+    this.damageFlash = 0;
+    this.isDead = false;
 
     this.createMesh();
   }
 
   createMesh() {
-    const bodyMaterial = new THREE.MeshLambertMaterial({
+    const bodyMaterial = new THREE.MeshStandardMaterial({
       color: COLORS.playerBody,
-      emissive: 0xf8ffe8,
-      emissiveIntensity: 0.92,
+      emissive: COLORS.playerBody,
+      emissiveIntensity: 0.18,
+      roughness: 0.72,
+      metalness: 0,
       flatShading: true
     });
-    const accentMaterial = new THREE.MeshLambertMaterial({
+    const accentMaterial = new THREE.MeshStandardMaterial({
       color: COLORS.playerAccent,
-      emissive: 0xe4ffb2,
-      emissiveIntensity: 0.7,
+      emissive: COLORS.playerAccent,
+      emissiveIntensity: 0.2,
+      roughness: 0.68,
+      metalness: 0.02,
+      flatShading: true
+    });
+    const darkMaterial = new THREE.MeshStandardMaterial({
+      color: COLORS.playerDark,
+      emissive: COLORS.playerDark,
+      emissiveIntensity: 0.14,
+      roughness: 0.84,
+      metalness: 0,
       flatShading: true
     });
     const shadowMaterial = new THREE.MeshBasicMaterial({
       color: COLORS.playerShadow,
       transparent: true,
-      opacity: 0.42
+      opacity: this.profile.id === 'dark' ? 0.5 : 0.3,
+      depthWrite: false
     });
 
-    const feet = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.12, 0.3), accentMaterial);
-    feet.position.y = 0.1;
-    feet.castShadow = true;
+    this.leftLeg = new THREE.Mesh(new THREE.BoxGeometry(0.13, 0.27, 0.17), darkMaterial);
+    this.leftLeg.position.set(-0.1, 0.15, 0);
+    this.rightLeg = this.leftLeg.clone();
+    this.rightLeg.position.x = 0.1;
 
-    const body = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.45, 0.34), bodyMaterial);
-    body.position.y = 0.4;
-    body.castShadow = true;
+    this.body = new THREE.Mesh(new THREE.BoxGeometry(0.36, 0.38, 0.3), bodyMaterial);
+    this.body.position.y = 0.47;
 
-    const head = new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.28, 0.28), bodyMaterial);
-    head.position.y = 0.78;
-    head.castShadow = true;
+    this.head = new THREE.Mesh(new THREE.BoxGeometry(0.27, 0.27, 0.27), bodyMaterial);
+    this.head.position.y = 0.78;
 
-    const upperGlow = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.22, 0.22), new THREE.MeshBasicMaterial({ color: 0xffffff }));
-    upperGlow.position.y = 1.02;
+    const cap = new THREE.Mesh(new THREE.BoxGeometry(0.33, 0.11, 0.33), accentMaterial);
+    cap.position.y = 0.96;
 
-    const light = new THREE.PointLight(0xf8ffcf, 1.8, 3.2, 1.7);
-    light.position.y = 0.7;
+    const facingMark = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.12, 0.08), accentMaterial);
+    facingMark.position.set(0, 0.5, 0.18);
 
-    const shadow = new THREE.Mesh(new THREE.CircleGeometry(0.3, 12), shadowMaterial);
+    this.revolver = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.1, 0.3), darkMaterial);
+    this.revolver.position.set(0.25, 0.52, 0.19);
+
+    const shadow = new THREE.Mesh(new THREE.CircleGeometry(0.31, 12), shadowMaterial);
     shadow.rotation.x = -Math.PI / 2;
-    shadow.position.y = 0.012;
-    shadow.receiveShadow = true;
+    shadow.position.y = 0.01;
 
-    this.group.add(shadow, feet, body, head, upperGlow, light);
+    [this.leftLeg, this.rightLeg, this.body, this.head, cap, facingMark, this.revolver].forEach((mesh) => {
+      mesh.castShadow = true;
+      mesh.receiveShadow = true;
+    });
+
+    this.group.add(
+      shadow,
+      this.leftLeg,
+      this.rightLeg,
+      this.body,
+      this.head,
+      cap,
+      facingMark,
+      this.revolver
+    );
   }
 
-  update(deltaTime, input, world) {
+  update(deltaTime, input, world, canMove = true) {
     const movement = input.getMovement();
     MOVE.set(0, 0, 0)
       .addScaledVector(SCREEN_RIGHT, movement.x)
       .addScaledVector(SCREEN_FORWARD, movement.y);
 
-    if (MOVE.lengthSq() > 0) {
+    if (canMove && !this.isDead && MOVE.lengthSq() > 0) {
       MOVE.normalize().multiplyScalar(PLAYER.speed * deltaTime);
 
       const nextX = this.position.x + MOVE.x;
@@ -77,14 +112,70 @@ export class Player {
         this.position.x = nextX;
         this.position.z = nextZ;
         this.group.rotation.y = Math.atan2(MOVE.x, MOVE.z);
+        this.walkTime += deltaTime * 12;
+        const swing = Math.sin(this.walkTime) * 0.42;
+        this.leftLeg.rotation.x = swing;
+        this.rightLeg.rotation.x = -swing;
       }
+    } else {
+      this.leftLeg.rotation.x *= 0.7;
+      this.rightLeg.rotation.x *= 0.7;
     }
 
     const terrainY = world.getHeightAtWorld(this.position.x, this.position.z);
-    if (terrainY !== null) {
-      const alpha = damping(deltaTime, PLAYER.yDamping);
-      this.position.y += (terrainY + 0.04 - this.position.y) * alpha;
+    const alpha = damping(deltaTime, PLAYER.yDamping);
+    this.position.y += (terrainY + 0.025 - this.position.y) * alpha;
+
+    this.damageFlash = Math.max(0, this.damageFlash - deltaTime);
+    const pulse = this.damageFlash > 0 ? 1 + Math.sin(this.damageFlash * 70) * 0.08 : 1;
+    this.body.scale.setScalar(pulse);
+    this.head.scale.setScalar(pulse);
+  }
+
+  setAimPoint(point) {
+    if (!point || this.isDead) {
+      return;
     }
+
+    const dx = point.x - this.position.x;
+    const dz = point.z - this.position.z;
+
+    if (dx * dx + dz * dz > 0.001) {
+      this.group.rotation.y = Math.atan2(dx, dz);
+    }
+  }
+
+  takeDamage(amount) {
+    if (this.isDead || amount <= 0) {
+      return 0;
+    }
+
+    const previous = this.health;
+    this.health = Math.max(0, this.health - amount);
+    this.damageFlash = 0.18;
+
+    if (this.health === 0) {
+      this.isDead = true;
+    }
+
+    return previous - this.health;
+  }
+
+  respawn(position) {
+    this.position.copy(position);
+    this.position.y += 0.025;
+    this.health = this.maxHealth;
+    this.isDead = false;
+    this.damageFlash = 0;
+    this.group.visible = true;
+  }
+
+  getHealthSnapshot() {
+    return {
+      health: this.health,
+      maxHealth: this.maxHealth,
+      isDead: this.isDead
+    };
   }
 
   addTo(scene) {
@@ -92,15 +183,23 @@ export class Player {
   }
 
   dispose() {
+    const materials = new Set();
+    const geometries = new Set();
+
     this.group.traverse((object) => {
-      object.geometry?.dispose();
+      if (object.geometry) {
+        geometries.add(object.geometry);
+      }
 
       if (Array.isArray(object.material)) {
-        object.material.forEach((material) => material.dispose());
-      } else {
-        object.material?.dispose();
+        object.material.forEach((material) => materials.add(material));
+      } else if (object.material) {
+        materials.add(object.material);
       }
     });
+
+    geometries.forEach((geometry) => geometry.dispose());
+    materials.forEach((material) => material.dispose());
     this.group.clear();
   }
 }

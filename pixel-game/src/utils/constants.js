@@ -1,61 +1,41 @@
 export const WORLD = {
-  gridSize: 57,
-  cellSize: 0.48,
-  blockHeight: 0.14,
-  maxTerrainLevel: 7,
+  chunkSize: 16,
+  renderDistance: 2,
+  cellSize: 0.84,
+  blockHeight: 0.24,
+  maxTerrainLevel: 5,
   seed: 1977,
-  edgePadding: 2
+  originClearRadius: 7
 };
 
 export const RENDER = {
-  maxInternalWidth: 860,
-  maxInternalHeight: 484,
-  clearColor: 0x0b0907,
-  fogColor: 0x0b0907,
+  maxInternalWidth: 960,
+  maxInternalHeight: 540,
   maxDeltaTime: 1 / 20
 };
 
 export const CAMERA = {
-  viewSize: 22,
-  near: -80,
-  far: 120,
+  viewSize: 19.5,
+  near: -100,
+  far: 160,
   minZoom: 0.78,
-  maxZoom: 2.25,
+  maxZoom: 2.35,
   followDamping: 9,
-  offset: { x: 11.8, y: 9.2, z: 11.8 }
+  offset: { x: 12.6, y: 10.2, z: 12.6 }
 };
 
 export const PLAYER = {
-  speed: 2.8,
+  speed: 3.2,
   radius: 0.28,
   height: 0.9,
   yDamping: 14
 };
 
 export const COLORS = {
-  grass: 0xb8c75f,
-  grassDark: 0x6f833d,
-  grassLight: 0xf2ee78,
-  moss: 0xd1d864,
-  fern: 0x86bd68,
-  dirt: 0xc99054,
-  dirtDark: 0x8e6239,
-  stone: 0xd1c49b,
-  stoneCool: 0xa9c2b6,
-  pathGlow: 0xf6fff1,
-  pathGlowWarm: 0xfff0b4,
-  pathGlowCool: 0xd9fff3,
-  trunk: 0xaa7445,
-  evergreen: 0x9cba59,
-  evergreenBlue: 0x68ae86,
-  evergreenDark: 0x516b34,
-  evergreenLight: 0xf0ea70,
-  dryNeedles: 0xef8267,
-  amberNeedles: 0xf0bd62,
-  limeNeedles: 0xddec68,
-  playerBody: 0xf8ffe8,
-  playerAccent: 0xe4ffb2,
-  playerShadow: 0x2b3728
+  playerBody: 0xe2e7d4,
+  playerAccent: 0xe0bd57,
+  playerDark: 0x334744,
+  playerShadow: 0x1c211d
 };
 
 export function hash2D(x, z, seed = WORLD.seed) {
@@ -64,6 +44,27 @@ export function hash2D(x, z, seed = WORLD.seed) {
   value = Math.imul(value, 1274126177);
   value ^= value >>> 16;
   return (value >>> 0) / 4294967295;
+}
+
+export function valueNoise2D(x, z, scale, seed = WORLD.seed) {
+  const scaledX = x / scale;
+  const scaledZ = z / scale;
+  const x0 = Math.floor(scaledX);
+  const z0 = Math.floor(scaledZ);
+  const tx = smoothStep(scaledX - x0);
+  const tz = smoothStep(scaledZ - z0);
+
+  const top = lerp(hash2D(x0, z0, seed), hash2D(x0 + 1, z0, seed), tx);
+  const bottom = lerp(hash2D(x0, z0 + 1, seed), hash2D(x0 + 1, z0 + 1, seed), tx);
+  return lerp(top, bottom, tz);
+}
+
+export function fractalNoise2D(x, z, seed = WORLD.seed) {
+  return (
+    valueNoise2D(x, z, 28, seed + 11) * 0.52 +
+    valueNoise2D(x, z, 11, seed + 37) * 0.31 +
+    valueNoise2D(x, z, 4, seed + 71) * 0.17
+  );
 }
 
 export function clamp(value, min, max) {
@@ -76,4 +77,8 @@ export function lerp(a, b, alpha) {
 
 export function damping(deltaTime, strength) {
   return 1 - Math.exp(-strength * deltaTime);
+}
+
+function smoothStep(value) {
+  return value * value * (3 - 2 * value);
 }

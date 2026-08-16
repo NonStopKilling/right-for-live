@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { RENDER } from '../utils/constants.js';
 
 export class Renderer {
-  constructor(canvas) {
+  constructor(canvas, profile) {
     this.canvas = canvas;
     this.instance = new THREE.WebGLRenderer({
       canvas,
@@ -12,12 +12,10 @@ export class Renderer {
     });
 
     this.instance.outputColorSpace = THREE.SRGBColorSpace;
-    this.instance.toneMapping = THREE.NoToneMapping;
-    this.instance.toneMappingExposure = 1;
-    this.instance.setClearColor(RENDER.clearColor, 1);
+    this.applyVisualProfile(profile);
     this.instance.setPixelRatio(1);
     this.instance.shadowMap.enabled = true;
-    this.instance.shadowMap.type = THREE.PCFSoftShadowMap;
+    this.instance.shadowMap.type = THREE.PCFShadowMap;
 
     this.size = {
       cssWidth: 1,
@@ -25,6 +23,14 @@ export class Renderer {
       internalWidth: 1,
       internalHeight: 1
     };
+  }
+
+  applyVisualProfile(profile) {
+    this.instance.toneMapping = profile.renderer.toneMapping === 'aces'
+      ? THREE.ACESFilmicToneMapping
+      : THREE.NoToneMapping;
+    this.instance.toneMappingExposure = profile.renderer.exposure;
+    this.instance.setClearColor(profile.background, 1);
   }
 
   resize(width, height) {

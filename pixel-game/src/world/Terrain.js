@@ -1,313 +1,235 @@
 import * as THREE from 'three';
-import { COLORS, WORLD, clamp, hash2D } from '../utils/constants.js';
+import { WORLD, clamp, fractalNoise2D, hash2D, valueNoise2D } from '../utils/constants.js';
 
 const MATRIX = new THREE.Matrix4();
+const QUATERNION = new THREE.Quaternion();
 const COLOR = new THREE.Color();
+const SCALE = new THREE.Vector3();
+const POSITION = new THREE.Vector3();
 
 export class Terrain {
-  constructor() {
-    this.group = new THREE.Group();
-    this.group.name = 'VoxelTerrain';
-    this.cells = new Map();
-
-    this.generateCells();
-    this.buildMeshes();
+  constructor(profile) {
+    this.profile = profile;
+    this.geometry = new THREE.BoxGeometry(1, 1, 1);
+    this.materials = this.createMaterials();
   }
 
-  generateCells() {
-    const half = Math.floor(WORLD.gridSize / 2);
-
-    for (let gz = -half; gz <= half; gz += 1) {
-      for (let gx = -half; gx <= half; gx += 1) {
-        const edgeDistance = Math.max(Math.abs(gx), Math.abs(gz)) / half;
-        const cornerDistance = Math.hypot(gx, gz) / Math.hypot(half, half);
-        const edgeNoise = hash2D(gx, gz);
-        const jaggedLimit = 0.96 - edgeNoise * 0.14;
-
-        if (edgeDistance > jaggedLimit || cornerDistance > 0.96 + edgeNoise * 0.06) {
-          continue;
-        }
-
-        const ridge =
-          hash2D(Math.floor(gx / 4), Math.floor(gz / 4), WORLD.seed + 41) * 0.8 +
-          hash2D(gx, gz, WORLD.seed + 91) * 0.38;
-        const centerFalloff = 1 - clamp(Math.hypot(gx, gz) / half, 0, 1);
-        let level = 1 + Math.floor(ridge * 2.1 + centerFalloff * 1.35);
-
-        if (Math.hypot(gx, gz) < 6.2) {
-          level = 1;
-        }
-
-        level = clamp(level, 1, WORLD.maxTerrainLevel);
-
-        const patch = hash2D(gx, gz, WORLD.seed + 211);
-        const baseKind =
-          level >= 5 && patch > 0.48
-            ? 'stone'
-            : patch > 0.84
-              ? 'dirt'
-              : 'grass';
-        const isGlow = this.isGlowTrail(gx, gz);
-
-        this.cells.set(this.key(gx, gz), {
-          gx,
-          gz,
-          level,
-          kind: isGlow ? 'glow' : baseKind,
-          baseKind,
-          walkable: true
-        });
-      }
-    }
-  }
-
-  isGlowTrail(gx, gz) {
-    const ring = Math.abs(Math.hypot(gx, gz) - 5.4) < 0.5 && hash2D(gx, gz, WORLD.seed + 311) > 0.28;
-    const diagonal = Math.abs(gz - Math.round(0.52 * gx + 2.2 * Math.sin(gx * 0.32))) <= 0 && gx > -24 && gx < 21;
-    const lowerRibbon = Math.abs(gz - Math.round(-0.34 * gx - 11 + Math.sin(gx * 0.45))) <= 0 && gx > -22 && gx < 19;
-    const leftHook = Math.abs(gx + 12) <= 0 && gz > -17 && gz < -7;
-    const rightHook = Math.abs(gx - 14) <= 0 && gz > -14 && gz < -5;
-
-    return ring || diagonal || lowerRibbon || leftHook || rightHook;
-  }
-
-  buildMeshes() {
-    const instances = {
-      grass: [],
-      dirt: [],
-      stone: [],
-      topCaps: [],
-      glowCaps: []
+  createMaterials() {
+    return {
+      surface: new THREE.MeshStandardMaterial({
+        color: 0xffffff,
+        roughness: 0.88,
+        metalness: 0,
+        flatShading: true
+      }),
+      earth: new THREE.MeshStandardMaterial({
+        color: 0xffffff,
+        roughness: 0.94,
+        metalness: 0,
+        flatShading: true
+      }),
+      stone: new THREE.MeshStandardMaterial({
+        color: 0xffffff,
+        roughness: 0.82,
+        metalness: 0.02,
+        flatShading: true
+      }),
+      trail: new THREE.MeshStandardMaterial({
+        color: 0xffffff,
+        roughness: 0.72,
+        metalness: 0,
+        emissive: this.profile.palette.trail[0],
+        emissiveIntensity: this.profile.id === 'dark' ? 0.22 : 0.08,
+        flatShading: true
+      }),
+      cap: new THREE.MeshBasicMaterial({
+        color: 0xffffff,
+        toneMapped: false
+      })
     };
-
-    for (const cell of this.cells.values()) {
-      for (let level = 1; level <= cell.level; level += 1) {
-        const kind = this.resolveBlockKind(cell, level);
-        instances[kind].push({
-          gx: cell.gx,
-          gz: cell.gz,
-          level,
-          color: this.resolveBlockColor(cell, kind, level)
-        });
-      }
-
-      if (cell.kind !== 'glow') {
-        const topKind = this.resolveBlockKind(cell, cell.level);
-        instances.topCaps.push({
-          gx: cell.gx,
-          gz: cell.gz,
-          level: cell.level,
-          kind: topKind,
-          color: this.resolveTopCapColor(cell, topKind)
-        });
-      }
-
-      if (cell.kind === 'glow') {
-        instances.glowCaps.push({
-          gx: cell.gx,
-          gz: cell.gz,
-          level: cell.level,
-          color: this.resolveGlowColor(cell)
-        });
-      }
-    }
-
-    this.createBlockMesh('grass', instances.grass);
-    this.createBlockMesh('dirt', instances.dirt);
-    this.createBlockMesh('stone', instances.stone);
-    this.createTopCapMesh(instances.topCaps);
-    this.createGlowCapMesh(instances.glowCaps);
   }
 
-  createBlockMesh(kind, blocks) {
-    if (blocks.length === 0) {
-      return;
+  getCell(gx, gz) {
+    const elevation = fractalNoise2D(gx, gz, WORLD.seed + 101);
+    const broadElevation = valueNoise2D(gx, gz, 46, WORLD.seed + 109);
+    const moisture = valueNoise2D(gx, gz, 31, WORLD.seed + 211);
+    const geology = valueNoise2D(gx, gz, 23, WORLD.seed + 307);
+    let forest = valueNoise2D(gx, gz, 36, WORLD.seed + 401);
+    const distanceFromOrigin = Math.hypot(gx, gz);
+
+    if (distanceFromOrigin > WORLD.originClearRadius && distanceFromOrigin < 25) {
+      forest = clamp(forest + 0.29, 0, 1);
     }
 
-    const geometry = new THREE.BoxGeometry(1, 1, 1);
-    const material = new THREE.MeshLambertMaterial({
-      color: 0xffffff,
-      emissive: this.resolveMaterialGlow(kind),
-      emissiveIntensity: kind === 'grass' ? 0.72 : 0.48,
-      vertexColors: true
-    });
-    const mesh = new THREE.InstancedMesh(geometry, material, blocks.length);
+    let level = 1 + Math.floor(clamp((elevation * 0.74 + broadElevation * 0.26 - 0.2) * 4.7, 0, WORLD.maxTerrainLevel - 1));
+
+    if (distanceFromOrigin < WORLD.originClearRadius) {
+      level = 1;
+    }
+
+    let surface = 'meadow';
+
+    if (geology > 0.71 && level >= 3) {
+      surface = 'stone';
+    } else if (moisture < 0.29) {
+      surface = 'soil';
+    } else if (moisture > 0.62) {
+      surface = 'moss';
+    }
+
+    if (this.isTrail(gx, gz)) {
+      surface = 'trail';
+    }
+
+    return {
+      gx,
+      gz,
+      level,
+      surface,
+      moisture,
+      geology,
+      forest,
+      walkable: true
+    };
+  }
+
+  generateChunkCells(chunkX, chunkZ) {
+    const cells = [];
+    const startX = chunkX * WORLD.chunkSize;
+    const startZ = chunkZ * WORLD.chunkSize;
+
+    for (let localZ = 0; localZ < WORLD.chunkSize; localZ += 1) {
+      for (let localX = 0; localX < WORLD.chunkSize; localX += 1) {
+        cells.push(this.getCell(startX + localX, startZ + localZ));
+      }
+    }
+
+    return cells;
+  }
+
+  createChunkGroup(cells, chunkKey) {
+    const group = new THREE.Group();
+    group.name = `TerrainChunk-${chunkKey}`;
+    const instances = { surface: [], earth: [], stone: [], trail: [], cap: [] };
+
+    for (const cell of cells) {
+      for (let layer = 1; layer <= cell.level; layer += 1) {
+        const kind = this.resolveLayerKind(cell, layer);
+        instances[kind].push({
+          cell,
+          layer,
+          color: this.resolveBlockColor(cell, kind, layer)
+        });
+      }
+
+      if (cell.surface !== 'trail') {
+        const topKind = this.resolveLayerKind(cell, cell.level);
+        const topColor = this.resolveBlockColor(cell, topKind, cell.level);
+        instances.cap.push({
+          cell,
+          layer: cell.level,
+          color: COLOR.setHex(topColor).multiplyScalar(this.profile.id === 'dark' ? 0.8 : 0.9).getHex()
+        });
+      }
+    }
+
+    for (const [kind, blocks] of Object.entries(instances)) {
+      const mesh = this.createInstancedBlocks(kind, blocks);
+
+      if (mesh) {
+        group.add(mesh);
+      }
+    }
+
+    return group;
+  }
+
+  createInstancedBlocks(kind, blocks) {
+    if (blocks.length === 0) {
+      return null;
+    }
+
+    const mesh = new THREE.InstancedMesh(this.geometry, this.materials[kind], blocks.length);
     mesh.name = `${kind}Blocks`;
-    mesh.castShadow = kind === 'stone';
-    mesh.receiveShadow = true;
+    mesh.castShadow = false;
+    mesh.receiveShadow = kind !== 'cap';
 
     blocks.forEach((block, index) => {
-      const position = this.gridToWorld(block.gx, block.gz);
-      MATRIX.compose(
-        new THREE.Vector3(
-          position.x,
-          (block.level - 0.5) * WORLD.blockHeight,
-          position.z
-        ),
-        new THREE.Quaternion(),
-        new THREE.Vector3(WORLD.cellSize * 0.76, WORLD.blockHeight * 0.94, WORLD.cellSize * 0.76)
+      const { x, z } = this.gridToWorld(block.cell.gx, block.cell.gz);
+      const isCap = kind === 'cap';
+      POSITION.set(
+        x,
+        isCap ? block.layer * WORLD.blockHeight + 0.008 : (block.layer - 0.5) * WORLD.blockHeight,
+        z
       );
+      SCALE.set(
+        WORLD.cellSize * (isCap ? 0.84 : 0.91),
+        isCap ? 0.014 : WORLD.blockHeight * 0.94,
+        WORLD.cellSize * (isCap ? 0.84 : 0.91)
+      );
+      MATRIX.compose(POSITION, QUATERNION, SCALE);
       mesh.setMatrixAt(index, MATRIX);
       mesh.setColorAt(index, COLOR.setHex(block.color));
     });
 
     mesh.instanceMatrix.needsUpdate = true;
-    mesh.instanceColor.needsUpdate = true;
-    this.group.add(mesh);
+    if (mesh.instanceColor) {
+      mesh.instanceColor.needsUpdate = true;
+    }
+    mesh.computeBoundingSphere();
+    return mesh;
   }
 
-  createTopCapMesh(caps) {
-    if (caps.length === 0) {
-      return;
+  resolveLayerKind(cell, layer) {
+    const isTop = layer === cell.level;
+
+    if (isTop && cell.surface === 'trail') {
+      return 'trail';
     }
 
-    const geometry = new THREE.BoxGeometry(1, 1, 1);
-    const material = new THREE.MeshBasicMaterial({
-      color: 0xffffff,
-      transparent: true,
-      opacity: 0.54,
-      vertexColors: true,
-      depthWrite: false
-    });
-    const mesh = new THREE.InstancedMesh(geometry, material, caps.length);
-    mesh.name = 'TerrainColorCaps';
+    if (isTop && cell.surface === 'stone') {
+      return 'stone';
+    }
 
-    caps.forEach((cap, index) => {
-      const position = this.gridToWorld(cap.gx, cap.gz);
-      MATRIX.compose(
-        new THREE.Vector3(position.x, cap.level * WORLD.blockHeight + 0.006, position.z),
-        new THREE.Quaternion(),
-        new THREE.Vector3(WORLD.cellSize * 0.74, 0.01, WORLD.cellSize * 0.74)
-      );
-      mesh.setMatrixAt(index, MATRIX);
-      mesh.setColorAt(index, COLOR.setHex(cap.color));
-    });
+    if (isTop && cell.surface === 'soil') {
+      return 'earth';
+    }
 
-    mesh.instanceMatrix.needsUpdate = true;
-    mesh.instanceColor.needsUpdate = true;
-    this.group.add(mesh);
+    if (isTop) {
+      return 'surface';
+    }
+
+    return layer <= cell.level - 2 && cell.geology > 0.57 ? 'stone' : 'earth';
   }
 
-  createGlowCapMesh(caps) {
-    if (caps.length === 0) {
-      return;
+  resolveBlockColor(cell, kind, layer) {
+    let family = kind;
+
+    if (kind === 'surface') {
+      family = cell.surface;
+    } else if (kind === 'earth') {
+      family = 'soil';
     }
 
-    const geometry = new THREE.BoxGeometry(1, 1, 1);
-    const material = new THREE.MeshBasicMaterial({
-      color: 0xffffff,
-      transparent: true,
-      opacity: 0.9,
-      vertexColors: true,
-      depthWrite: false
-    });
-    const mesh = new THREE.InstancedMesh(geometry, material, caps.length);
-    mesh.name = 'GlowPathCaps';
+    const palette = this.profile.palette[family];
+    const region = valueNoise2D(cell.gx, cell.gz, 9, WORLD.seed + 503);
+    const detail = hash2D(cell.gx, cell.gz, WORLD.seed + layer * 43 + 509);
+    const index = Math.min(palette.length - 1, Math.floor(region * palette.length));
+    const variation = 0.94 + detail * 0.12;
 
-    caps.forEach((cap, index) => {
-      const position = this.gridToWorld(cap.gx, cap.gz);
-      MATRIX.compose(
-        new THREE.Vector3(position.x, cap.level * WORLD.blockHeight + 0.014, position.z),
-        new THREE.Quaternion(),
-        new THREE.Vector3(WORLD.cellSize * 0.64, 0.018, WORLD.cellSize * 0.64)
-      );
-      mesh.setMatrixAt(index, MATRIX);
-      mesh.setColorAt(index, COLOR.setHex(cap.color));
-    });
-
-    mesh.instanceMatrix.needsUpdate = true;
-    mesh.instanceColor.needsUpdate = true;
-    this.group.add(mesh);
-  }
-
-  resolveMaterialGlow(kind) {
-    if (kind === 'grass') {
-      return 0x536624;
-    }
-
-    if (kind === 'stone') {
-      return 0x3e4036;
-    }
-
-    return 0x4a3019;
-  }
-
-  resolveBlockKind(cell, level) {
-    if (level === cell.level && cell.kind === 'glow') {
-      return cell.baseKind;
-    }
-
-    if (level === cell.level) {
-      return cell.kind;
-    }
-
-    return level <= cell.level - 3 ? 'stone' : 'dirt';
-  }
-
-  resolveBlockColor(cell, kind, level) {
-    const noise = hash2D(cell.gx, cell.gz, WORLD.seed + level * 37);
-    const variance = 1.08 + noise * 0.26;
-    const base = {
-      grass: this.resolveGrassColor(noise),
-      dirt: noise > 0.5 ? COLORS.dirt : COLORS.dirtDark,
-      stone: noise > 0.58 ? COLORS.stoneCool : COLORS.stone
-    }[kind];
-
-    COLOR.setHex(base).multiplyScalar(variance);
+    COLOR.setHex(palette[index]).multiplyScalar(variation);
     return COLOR.getHex();
   }
 
-  resolveGlowColor(cell) {
-    const noise = hash2D(cell.gx, cell.gz, WORLD.seed + 1201);
-
-    if (noise > 0.72) {
-      return COLORS.pathGlowWarm;
-    }
-
-    if (noise < 0.28) {
-      return COLORS.pathGlowCool;
-    }
-
-    return COLORS.pathGlow;
-  }
-
-  resolveTopCapColor(cell, kind) {
-    const noise = hash2D(cell.gx, cell.gz, WORLD.seed + 1301);
-    const base =
-      kind === 'grass'
-        ? this.resolveGrassColor(hash2D(cell.gx, cell.gz, WORLD.seed + 1302))
-        : kind === 'stone'
-          ? COLORS.stoneCool
-          : COLORS.dirt;
-    const lift = kind === 'grass' ? 1.38 + noise * 0.28 : 1.24 + noise * 0.2;
-
-    COLOR.setHex(base).multiplyScalar(lift);
-    return COLOR.getHex();
-  }
-
-  resolveGrassColor(noise) {
-    if (noise > 0.82) {
-      return COLORS.grassLight;
-    }
-
-    if (noise < 0.18) {
-      return COLORS.grassDark;
-    }
-
-    if (noise > 0.62) {
-      return COLORS.moss;
-    }
-
-    if (noise > 0.42) {
-      return COLORS.fern;
-    }
-
-    return COLORS.grass;
+  isTrail(gx, gz) {
+    const centerLine = Math.round(Math.sin(gx * 0.17) * 2.2 + Math.sin(gx * 0.055) * 3.1);
+    const ribbon = Math.abs(gz - centerLine) === 0 && Math.abs(gx) < 52;
+    const ring = Math.abs(Math.hypot(gx, gz) - 5.2) < 0.52;
+    return ribbon || ring;
   }
 
   getHeightAtGrid(gx, gz) {
-    const cell = this.cells.get(this.key(gx, gz));
-    return cell ? cell.level * WORLD.blockHeight : null;
+    return this.getCell(gx, gz).level * WORLD.blockHeight;
   }
 
   getHeightAtWorld(x, z) {
@@ -317,14 +239,11 @@ export class Terrain {
 
   isWalkableWorld(x, z) {
     const { gx, gz } = this.worldToGrid(x, z);
-    return Boolean(this.cells.get(this.key(gx, gz))?.walkable);
+    return this.getCell(gx, gz).walkable;
   }
 
   gridToWorld(gx, gz) {
-    return {
-      x: gx * WORLD.cellSize,
-      z: gz * WORLD.cellSize
-    };
+    return { x: gx * WORLD.cellSize, z: gz * WORLD.cellSize };
   }
 
   worldToGrid(x, z) {
@@ -334,27 +253,23 @@ export class Terrain {
     };
   }
 
-  getSpawnPoint() {
-    const gx = 4;
-    const gz = -3;
-    const { x, z } = this.gridToWorld(gx, gz);
-    return new THREE.Vector3(x, this.getHeightAtGrid(gx, gz) ?? WORLD.blockHeight, z);
+  worldToChunk(x, z) {
+    const { gx, gz } = this.worldToGrid(x, z);
+    return {
+      chunkX: Math.floor(gx / WORLD.chunkSize),
+      chunkZ: Math.floor(gz / WORLD.chunkSize)
+    };
   }
 
-  key(gx, gz) {
-    return `${gx},${gz}`;
+  getSpawnPoint() {
+    const gx = 2;
+    const gz = -2;
+    const { x, z } = this.gridToWorld(gx, gz);
+    return new THREE.Vector3(x, this.getHeightAtGrid(gx, gz), z);
   }
 
   dispose() {
-    this.group.traverse((object) => {
-      object.geometry?.dispose();
-
-      if (Array.isArray(object.material)) {
-        object.material.forEach((material) => material.dispose());
-      } else {
-        object.material?.dispose();
-      }
-    });
-    this.group.clear();
+    this.geometry.dispose();
+    Object.values(this.materials).forEach((material) => material.dispose());
   }
 }

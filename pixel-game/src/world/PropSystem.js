@@ -1,139 +1,331 @@
 import * as THREE from 'three';
-import { COLORS, WORLD, hash2D } from '../utils/constants.js';
+import { WORLD, hash2D } from '../utils/constants.js';
 
 const MATRIX = new THREE.Matrix4();
-const QUATERNION = new THREE.Quaternion();
 const COLOR = new THREE.Color();
+const QUATERNION = new THREE.Quaternion();
+const Y_AXIS = new THREE.Vector3(0, 1, 0);
+const POSITION = new THREE.Vector3();
+const SCALE = new THREE.Vector3();
 
 export class PropSystem {
-  constructor(terrain) {
+  constructor(terrain, profile) {
     this.terrain = terrain;
-    this.group = new THREE.Group();
-    this.group.name = 'PropSystem';
-
-    this.createPebbles();
-    this.createGrassTufts();
-    this.createBrokenPillars();
+    this.profile = profile;
+    this.rockGeometry = new THREE.BoxGeometry(1, 1, 1);
+    this.artifactGeometry = new THREE.BoxGeometry(1, 1, 1);
+    this.spriteGeometry = new THREE.PlaneGeometry(1, 1);
+    this.spriteTexture = this.createPixelSpriteTexture();
+    this.materials = {
+      rock: new THREE.MeshStandardMaterial({
+        color: 0xffffff,
+        roughness: 0.86,
+        metalness: 0.02,
+        flatShading: true
+      }),
+      artifact: new THREE.MeshStandardMaterial({
+        color: 0xffffff,
+        emissive: 0x40d9c3,
+        emissiveIntensity: profile.id === 'dark' ? 0.7 : 0.35,
+        roughness: 0.42,
+        metalness: 0.16,
+        flatShading: true
+      }),
+      sprite: new THREE.MeshBasicMaterial({
+        color: 0xffffff,
+        map: this.spriteTexture,
+        alphaTest: 0.38,
+        transparent: true,
+        depthWrite: false,
+        side: THREE.DoubleSide,
+        toneMapped: false
+      })
+    };
   }
 
-  createPebbles() {
-    const pebbles = this.pickCells(0.91, 7, 24, 601).slice(0, 130);
-    const geometry = new THREE.BoxGeometry(1, 1, 1);
-    const material = new THREE.MeshLambertMaterial({
-      color: COLORS.stone,
-      emissive: 0x342817,
-      emissiveIntensity: 0.18,
-      vertexColors: true
-    });
-    const mesh = new THREE.InstancedMesh(geometry, material, pebbles.length);
-    mesh.name = 'Pebbles';
-    mesh.castShadow = true;
-    mesh.receiveShadow = true;
+  createChunkGroup(cells, chunkKey, depletedResources = new Set()) {
+    const group = new THREE.Group();
+    group.name = `PropsChunk-${chunkKey}`;
+    const rocks = [];
+    const artifacts = [];
+    const sprites = [];
 
-    pebbles.forEach((cell, index) => {
-      const { x, z } = this.terrain.gridToWorld(cell.gx, cell.gz);
-      const noise = hash2D(cell.gx, cell.gz, WORLD.seed + 617);
-      const y = cell.level * WORLD.blockHeight + 0.045;
-      QUATERNION.setFromAxisAngle(new THREE.Vector3(0, 1, 0), noise * Math.PI);
-      MATRIX.compose(
-        new THREE.Vector3(x, y, z),
-        QUATERNION,
-        new THREE.Vector3(0.18 + noise * 0.12, 0.08 + noise * 0.06, 0.14 + noise * 0.1)
-      );
-      mesh.setMatrixAt(index, MATRIX);
-      mesh.setColorAt(index, COLOR.setHex(COLORS.stone).multiplyScalar(0.72 + noise * 0.42));
-    });
+    for (const cell of cells) {
+      const isArtifact = this.shouldPlaceArtifact(cell);
 
-    mesh.instanceMatrix.needsUpdate = true;
-    mesh.instanceColor.needsUpdate = true;
-    this.group.add(mesh);
-  }
+      if (isArtifact && !depletedResources.has(this.getArtifactId(cell))) {
+        this.addArtifactRecipe(cell, artifacts);
+      }
 
-  createGrassTufts() {
-    const tufts = this.pickCells(0.93, 8, 25, 701).slice(0, 95);
-    const geometry = new THREE.ConeGeometry(0.09, 0.32, 4, 1);
-    const material = new THREE.MeshBasicMaterial({
-      color: COLORS.grassLight,
-      vertexColors: true
-    });
-    const mesh = new THREE.InstancedMesh(geometry, material, tufts.length);
-    mesh.name = 'GrassTufts';
-    mesh.castShadow = false;
+      if (!isArtifact && this.shouldPlaceRock(cell) && !depletedResources.has(this.getRockId(cell))) {
+        this.addRockRecipe(cell, rocks);
+      }
 
-    tufts.forEach((cell, index) => {
-      const { x, z } = this.terrain.gridToWorld(cell.gx, cell.gz);
-      const noise = hash2D(cell.gx, cell.gz, WORLD.seed + 733);
-      QUATERNION.setFromAxisAngle(new THREE.Vector3(0, 1, 0), noise * Math.PI * 2);
-      MATRIX.compose(
-        new THREE.Vector3(
-          x + (noise - 0.5) * 0.14,
-          cell.level * WORLD.blockHeight + 0.16,
-          z + (hash2D(cell.gz, cell.gx, WORLD.seed + 734) - 0.5) * 0.14
-        ),
-        QUATERNION,
-        new THREE.Vector3(1, 0.75 + noise * 0.55, 1)
-      );
-      mesh.setMatrixAt(index, MATRIX);
-      mesh.setColorAt(index, COLOR.setHex(noise > 0.54 ? COLORS.grassLight : COLORS.moss).multiplyScalar(0.9 + noise * 0.24));
-    });
-
-    mesh.instanceMatrix.needsUpdate = true;
-    mesh.instanceColor.needsUpdate = true;
-    this.group.add(mesh);
-  }
-
-  createBrokenPillars() {
-    const pillars = [
-      { gx: -6, gz: 4, height: 0.68 },
-      { gx: -5, gz: 5, height: 0.42 },
-      { gx: 7, gz: -2, height: 0.76 },
-      { gx: 8, gz: -1, height: 0.34 }
-    ];
-    const material = new THREE.MeshLambertMaterial({
-      color: 0xb5aa85,
-      emissive: 0x352d1a,
-      emissiveIntensity: 0.42,
-      flatShading: true
-    });
-
-    pillars.forEach((pillar) => {
-      const { x, z } = this.terrain.gridToWorld(pillar.gx, pillar.gz);
-      const y = this.terrain.getHeightAtGrid(pillar.gx, pillar.gz) ?? WORLD.blockHeight;
-      const mesh = new THREE.Mesh(new THREE.BoxGeometry(0.22, pillar.height, 0.22), material);
-      mesh.position.set(x, y + pillar.height / 2, z);
-      mesh.rotation.y = hash2D(pillar.gx, pillar.gz, WORLD.seed + 811) * Math.PI;
-      mesh.castShadow = true;
-      mesh.receiveShadow = true;
-      this.group.add(mesh);
-    });
-  }
-
-  pickCells(threshold, minDistance, maxEdge, seedOffset) {
-    const cells = [];
-
-    for (const cell of this.terrain.cells.values()) {
-      const distance = Math.hypot(cell.gx, cell.gz);
-      const edge = Math.max(Math.abs(cell.gx), Math.abs(cell.gz));
-      const density = hash2D(cell.gx, cell.gz, WORLD.seed + seedOffset);
-
-      if (cell.kind === 'grass' && distance > minDistance && edge < maxEdge && density > threshold) {
-        cells.push(cell);
+      if (this.shouldPlaceSprite(cell)) {
+        this.addSprite(cell, sprites);
       }
     }
 
-    return cells;
+    const rockMesh = this.createRockMesh(rocks);
+    const artifactMesh = this.createArtifactMesh(artifacts);
+    const spriteMesh = this.createSpriteMesh(sprites);
+
+    if (rockMesh) {
+      group.add(rockMesh);
+    }
+
+    if (artifactMesh) {
+      group.add(artifactMesh);
+    }
+
+    if (spriteMesh) {
+      group.add(spriteMesh);
+    }
+
+    return group;
+  }
+
+  getResourceNodes(cells) {
+    const resources = [];
+
+    cells.forEach((cell) => {
+      const { x, z } = this.terrain.gridToWorld(cell.gx, cell.gz);
+      const base = {
+        gx: cell.gx,
+        gz: cell.gz,
+        x,
+        y: cell.level * WORLD.blockHeight,
+        z,
+        layer: 'props'
+      };
+
+      if (this.shouldPlaceArtifact(cell)) {
+        resources.push({
+          ...base,
+          id: this.getArtifactId(cell),
+          type: 'artifact',
+          label: 'FRAGMENTO EXTRANO'
+        });
+      } else if (this.shouldPlaceRock(cell)) {
+        resources.push({
+          ...base,
+          id: this.getRockId(cell),
+          type: 'stone',
+          label: 'PIEDRA'
+        });
+      }
+    });
+
+    return resources;
+  }
+
+  getRockId(cell) {
+    return `stone:${cell.gx}:${cell.gz}`;
+  }
+
+  getArtifactId(cell) {
+    return `artifact:${cell.gx}:${cell.gz}`;
+  }
+
+  shouldPlaceRock(cell) {
+    if (cell.surface === 'trail' || Math.hypot(cell.gx, cell.gz) < WORLD.originClearRadius - 1) {
+      return false;
+    }
+
+    const threshold = cell.surface === 'stone' ? 0.91 : 0.982;
+    return hash2D(cell.gx, cell.gz, WORLD.seed + 1009) > threshold;
+  }
+
+  shouldPlaceArtifact(cell) {
+    if (cell.gx === 5 && cell.gz === -4) {
+      return true;
+    }
+
+    if (cell.surface === 'trail' || Math.hypot(cell.gx, cell.gz) < WORLD.originClearRadius + 3) {
+      return false;
+    }
+
+    return hash2D(cell.gx, cell.gz, WORLD.seed + 1193) > 0.997;
+  }
+
+  shouldPlaceSprite(cell) {
+    if (cell.surface !== 'meadow' && cell.surface !== 'moss') {
+      return false;
+    }
+
+    return hash2D(cell.gx, cell.gz, WORLD.seed + 1103) > 0.965;
+  }
+
+  addRockRecipe(cell, rocks) {
+    const noise = hash2D(cell.gx, cell.gz, WORLD.seed + 1013);
+    const count = noise > 0.72 ? 3 : noise > 0.36 ? 2 : 1;
+    const baseY = cell.level * WORLD.blockHeight;
+    const { x, z } = this.terrain.gridToWorld(cell.gx, cell.gz);
+    const color = this.resolveColor(this.profile.palette.rock, noise);
+
+    for (let index = 0; index < count; index += 1) {
+      const angle = noise * Math.PI * 2 + index * 2.35;
+      const width = 0.34 - index * 0.055;
+
+      rocks.push({
+        x: x + Math.cos(angle) * index * 0.12,
+        y: baseY + 0.11 + index * 0.08,
+        z: z + Math.sin(angle) * index * 0.12,
+        rotation: angle,
+        scaleX: width * (1.05 + noise * 0.28),
+        scaleY: 0.2 + noise * 0.11,
+        scaleZ: width * 0.82,
+        color
+      });
+    }
+  }
+
+  addArtifactRecipe(cell, artifacts) {
+    const noise = hash2D(cell.gx, cell.gz, WORLD.seed + 1201);
+    const baseY = cell.level * WORLD.blockHeight;
+    const { x, z } = this.terrain.gridToWorld(cell.gx, cell.gz);
+    const colors = [0x146e68, 0x31b9aa, 0x8cebd2];
+
+    for (let index = 0; index < 3; index += 1) {
+      const size = 0.28 - index * 0.055;
+      artifacts.push({
+        x,
+        y: baseY + 0.12 + index * 0.19,
+        z,
+        rotation: Math.PI / 4 + noise * 0.35 + index * 0.16,
+        scaleX: size,
+        scaleY: 0.2,
+        scaleZ: size,
+        color: colors[index]
+      });
+    }
+  }
+
+  addSprite(cell, sprites) {
+    const noise = hash2D(cell.gx, cell.gz, WORLD.seed + 1117);
+    const offsetNoise = hash2D(cell.gz, cell.gx, WORLD.seed + 1123);
+    const { x, z } = this.terrain.gridToWorld(cell.gx, cell.gz);
+    const palette = this.profile.spriteColors;
+
+    sprites.push({
+      x: x + (noise - 0.5) * WORLD.cellSize * 0.45,
+      y: cell.level * WORLD.blockHeight + 0.19,
+      z: z + (offsetNoise - 0.5) * WORLD.cellSize * 0.45,
+      rotation: Math.PI / 4 + (noise - 0.5) * 0.24,
+      scale: 0.3 + noise * 0.16,
+      color: palette[Math.min(palette.length - 1, Math.floor(noise * palette.length))]
+    });
+  }
+
+  createRockMesh(rocks) {
+    if (rocks.length === 0) {
+      return null;
+    }
+
+    const mesh = new THREE.InstancedMesh(this.rockGeometry, this.materials.rock, rocks.length);
+    mesh.name = 'ChunkRocks';
+    mesh.castShadow = true;
+    mesh.receiveShadow = true;
+
+    rocks.forEach((rock, index) => {
+      POSITION.set(rock.x, rock.y, rock.z);
+      QUATERNION.setFromAxisAngle(Y_AXIS, rock.rotation);
+      SCALE.set(rock.scaleX, rock.scaleY, rock.scaleZ);
+      MATRIX.compose(POSITION, QUATERNION, SCALE);
+      mesh.setMatrixAt(index, MATRIX);
+      mesh.setColorAt(index, COLOR.setHex(rock.color));
+    });
+
+    mesh.instanceMatrix.needsUpdate = true;
+    mesh.instanceColor.needsUpdate = true;
+    mesh.computeBoundingSphere();
+    return mesh;
+  }
+
+  createArtifactMesh(artifacts) {
+    if (artifacts.length === 0) {
+      return null;
+    }
+
+    const mesh = new THREE.InstancedMesh(
+      this.artifactGeometry,
+      this.materials.artifact,
+      artifacts.length
+    );
+    mesh.name = 'ChunkArtifacts';
+    mesh.castShadow = true;
+    mesh.receiveShadow = true;
+
+    artifacts.forEach((artifact, index) => {
+      POSITION.set(artifact.x, artifact.y, artifact.z);
+      QUATERNION.setFromAxisAngle(Y_AXIS, artifact.rotation);
+      SCALE.set(artifact.scaleX, artifact.scaleY, artifact.scaleZ);
+      MATRIX.compose(POSITION, QUATERNION, SCALE);
+      mesh.setMatrixAt(index, MATRIX);
+      mesh.setColorAt(index, COLOR.setHex(artifact.color));
+    });
+
+    mesh.instanceMatrix.needsUpdate = true;
+    mesh.instanceColor.needsUpdate = true;
+    mesh.computeBoundingSphere();
+    return mesh;
+  }
+
+  createSpriteMesh(sprites) {
+    if (sprites.length === 0) {
+      return null;
+    }
+
+    const mesh = new THREE.InstancedMesh(this.spriteGeometry, this.materials.sprite, sprites.length);
+    mesh.name = 'PixelGrassSprites';
+    mesh.renderOrder = 2;
+
+    sprites.forEach((sprite, index) => {
+      POSITION.set(sprite.x, sprite.y, sprite.z);
+      QUATERNION.setFromAxisAngle(Y_AXIS, sprite.rotation);
+      SCALE.set(sprite.scale, sprite.scale, sprite.scale);
+      MATRIX.compose(POSITION, QUATERNION, SCALE);
+      mesh.setMatrixAt(index, MATRIX);
+      mesh.setColorAt(index, COLOR.setHex(sprite.color));
+    });
+
+    mesh.instanceMatrix.needsUpdate = true;
+    mesh.instanceColor.needsUpdate = true;
+    mesh.computeBoundingSphere();
+    return mesh;
+  }
+
+  createPixelSpriteTexture() {
+    const canvas = document.createElement('canvas');
+    canvas.width = 8;
+    canvas.height = 8;
+    const context = canvas.getContext('2d');
+
+    context.clearRect(0, 0, 8, 8);
+    context.fillStyle = '#ffffff';
+    context.fillRect(3, 1, 2, 7);
+    context.fillRect(1, 3, 2, 5);
+    context.fillRect(5, 2, 2, 6);
+    context.fillRect(0, 6, 8, 2);
+
+    const texture = new THREE.CanvasTexture(canvas);
+    texture.colorSpace = THREE.SRGBColorSpace;
+    texture.magFilter = THREE.NearestFilter;
+    texture.minFilter = THREE.NearestFilter;
+    texture.generateMipmaps = false;
+    texture.needsUpdate = true;
+    return texture;
+  }
+
+  resolveColor(palette, noise) {
+    return palette[Math.min(palette.length - 1, Math.floor(noise * palette.length))];
   }
 
   dispose() {
-    this.group.traverse((object) => {
-      object.geometry?.dispose();
-
-      if (Array.isArray(object.material)) {
-        object.material.forEach((material) => material.dispose());
-      } else {
-        object.material?.dispose();
-      }
-    });
-    this.group.clear();
+    this.rockGeometry.dispose();
+    this.artifactGeometry.dispose();
+    this.spriteGeometry.dispose();
+    this.spriteTexture.dispose();
+    Object.values(this.materials).forEach((material) => material.dispose());
   }
 }

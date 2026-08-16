@@ -57,3 +57,89 @@
 [2m1:38:31 a. m.[22m [33m[1m[vite][22m[39m [33m[2m(client)[22m[39m [2m[console.warn] [22mTHREE.WebGLShadowMap: PCFSoftShadowMap has been deprecated. Using PCFShadowMap instead.
 [2m1:38:38 a. m.[22m [33m[1m[vite][22m[39m [33m[2m(client)[22m[39m [2m[console.warn] [22mTHREE.WebGLShadowMap: PCFSoftShadowMap has been deprecated. Using PCFShadowMap instead.
 [2m1:38:40 a. m.[22m [33m[1m[vite][22m[39m [33m[2m(client)[22m[39m [2m[console.warn] [22mTHREE.WebGLShadowMap: PCFSoftShadowMap has been deprecated. Using PCFShadowMap instead.
+[2m2:04:11 a. m.[22m [33m[1m[vite][22m[39m [33m[2m(client)[22m[39m [2m[console.warn] [22mTHREE.WebGLShadowMap: PCFSoftShadowMap has been deprecated. Using PCFShadowMap instead.
+[2m2:08:30 a. m.[22m [33m[1m[vite][22m[39m [33m[2m(client)[22m[39m [2m[console.warn] [22mTHREE.Material: parameter 'color' has value of undefined.
+[2m2:08:30 a. m.[22m [33m[1m[vite][22m[39m [33m[2m(client)[22m[39m [2m[console.warn] [22mTHREE.Material: parameter 'color' has value of undefined.
+[2m2:08:30 a. m.[22m [33m[1m[vite][22m[39m [33m[2m(client)[22m[39m [2m[console.warn] [22mTHREE.Material: parameter 'color' has value of undefined.
+[2m2:08:30 a. m.[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m [31m[Unhandled error] [1mTypeError[22m: Cannot set properties of null (setting 'needsUpdate')
+[39m > PropSystem.createPebbles src/world/PropSystem.js?t=1786860509600:48:36
+ > new PropSystem src/world/PropSystem.js?t=1786860509600:14:10
+ > new World src/world/World.js?t=1786860509600:15:18
+ > new Game src/core/Game.js?t=1786860509600:24:18
+ > src/main.js?t=1786860509600:13:10
+
+[2m2:09:35 a. m.[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m [31m[Unhandled error] [1mTypeError[22m: Cannot read properties of undefined (reading 'palette')
+[39m > Terrain.createMaterials src/world/Terrain.js?t=1786860575508:44:32
+ > new Terrain src/world/Terrain.js?t=1786860575508:14:27
+ > new World src/world/World.js?t=1786860575508:12:20
+ > new Game src/core/Game.js?t=1786860575508:24:18
+ > src/main.js?t=1786860575508:13:10
+
+[2m2:10:55 a. m.[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m [31m[Unhandled error] [1mTypeError[22m: Cannot read properties of undefined (reading 'palette')
+[39m > Terrain.createMaterials src/world/Terrain.js?t=1786860575508:44:32
+ > new Terrain src/world/Terrain.js?t=1786860575508:14:27
+ > new World src/world/World.js?t=1786860655170:12:20
+ > new Game src/core/Game.js?t=1786860655170:24:18
+ > src/main.js?t=1786860655170:13:10
+
+[2m2:11:43 a. m.[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m [31m[Unhandled error] [1mTypeError[22m: Cannot read properties of undefined (reading 'palette')
+[39m > Terrain.createMaterials src/world/Terrain.js?t=1786860575508:44:32
+ > new Terrain src/world/Terrain.js?t=1786860575508:14:27
+ > new World src/world/World.js?t=1786860703312:12:20
+ > new Game src/core/Game.js?t=1786860703312:24:18
+ > src/main.js?t=1786860703312:13:10
+
+[2m2:12:16 a. m.[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m [31m[Unhandled error] [1mTypeError[22m: Cannot read properties of undefined (reading 'palette')
+[39m > Terrain.createMaterials src/world/Terrain.js?t=1786860575508:44:32
+ > new Terrain src/world/Terrain.js?t=1786860575508:14:27
+ > new World src/world/World.js?t=1786860735822:17:20
+ > new Game src/core/Game.js?t=1786860735822:24:18
+ > src/main.js?t=1786860735822:13:10
+
+[2m2:12:38 a. m.[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m [31m[Unhandled error] [1mTypeError[22m: Cannot read properties of undefined (reading 'palette')
+[39m > Terrain.createMaterials src/world/Terrain.js?t=1786860575508:44:32
+ > new Terrain src/world/Terrain.js?t=1786860575508:14:27
+ > new World src/world/World.js?t=1786860758286:17:20
+ > new Game src/core/Game.js?t=1786860758286:24:18
+ > src/main.js?t=1786860758286:13:10
+
+[2m2:13:36 a. m.[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m [31m[Unhandled error] [1mTypeError[22m: Cannot read properties of undefined (reading 'palette')
+[39m > Terrain.createMaterials src/world/Terrain.js?t=1786860575508:44:32
+ > new Terrain src/world/Terrain.js?t=1786860575508:14:27
+ > new World src/world/World.js?t=1786860758286:17:20
+ > new Game src/core/Game.js?t=1786860816541:24:18
+ > src/main.js?t=1786860816541:13:10
+
+[2m2:14:33 a. m.[22m [33m[1m[vite][22m[39m [33m[2m(client)[22m[39m [2m[console.warn] [22mTHREE.WebGLShadowMap: PCFSoftShadowMap has been deprecated. Using PCFShadowMap instead.
+[2m2:14:33 a. m.[22m [33m[1m[vite][22m[39m [33m[2m(client)[22m[39m [2m[console.warn] [22mTHREE.WebGLShadowMap: PCFSoftShadowMap has been deprecated. Using PCFShadowMap instead.
+[2m2:16:12 a. m.[22m [33m[1m[vite][22m[39m [33m[2m(client)[22m[39m [2m[console.warn] [22mTHREE.WebGLShadowMap: PCFSoftShadowMap has been deprecated. Using PCFShadowMap instead.
+[2m2:17:01 a. m.[22m [33m[1m[vite][22m[39m [33m[2m(client)[22m[39m [2m[console.warn] [22mTHREE.WebGLShadowMap: PCFSoftShadowMap has been deprecated. Using PCFShadowMap instead.
+[2m2:18:28 a. m.[22m [33m[1m[vite][22m[39m [33m[2m(client)[22m[39m [2m[console.warn] [22mTHREE.WebGLShadowMap: PCFSoftShadowMap has been deprecated. Using PCFShadowMap instead.
+[2m2:18:30 a. m.[22m [33m[1m[vite][22m[39m [33m[2m(client)[22m[39m [2m[console.warn] [22mTHREE.WebGLShadowMap: PCFSoftShadowMap has been deprecated. Using PCFShadowMap instead.
+[2m2:19:26 a. m.[22m [33m[1m[vite][22m[39m [33m[2m(client)[22m[39m [2m[console.warn] [22mTHREE.WebGLShadowMap: PCFSoftShadowMap has been deprecated. Using PCFShadowMap instead.
+[2m2:19:50 a. m.[22m [33m[1m[vite][22m[39m [33m[2m(client)[22m[39m [2m[console.warn] [22mTHREE.WebGLShadowMap: PCFSoftShadowMap has been deprecated. Using PCFShadowMap instead.
+[2m2:20:24 a. m.[22m [33m[1m[vite][22m[39m [33m[2m(client)[22m[39m [2m[console.warn] [22mTHREE.WebGLShadowMap: PCFSoftShadowMap has been deprecated. Using PCFShadowMap instead.
+[2m2:20:53 a. m.[22m [33m[1m[vite][22m[39m [33m[2m(client)[22m[39m [2m[console.warn] [22mTHREE.WebGLShadowMap: PCFSoftShadowMap has been deprecated. Using PCFShadowMap instead.
+[2m2:20:54 a. m.[22m [33m[1m[vite][22m[39m [33m[2m(client)[22m[39m [2m[console.warn] [22mTHREE.WebGLShadowMap: PCFSoftShadowMap has been deprecated. Using PCFShadowMap instead.
+[2m2:21:16 a. m.[22m [33m[1m[vite][22m[39m [33m[2m(client)[22m[39m [2m[console.warn] [22mTHREE.WebGLShadowMap: PCFSoftShadowMap has been deprecated. Using PCFShadowMap instead.
+[2m2:21:23 a. m.[22m [33m[1m[vite][22m[39m [33m[2m(client)[22m[39m [2m[console.warn] [22mTHREE.WebGLShadowMap: PCFSoftShadowMap has been deprecated. Using PCFShadowMap instead.
+[2m2:22:20 a. m.[22m [33m[1m[vite][22m[39m [33m[2m(client)[22m[39m [2m[console.warn] [22mTHREE.WebGLShadowMap: PCFSoftShadowMap has been deprecated. Using PCFShadowMap instead.
+[2m2:22:30 a. m.[22m [33m[1m[vite][22m[39m [33m[2m(client)[22m[39m [2m[console.warn] [22mTHREE.WebGLShadowMap: PCFSoftShadowMap has been deprecated. Using PCFShadowMap instead.
+[2m2:22:30 a. m.[22m [33m[1m[vite][22m[39m [33m[2m(client)[22m[39m [2m[console.warn] [22mTHREE.WebGLShadowMap: PCFSoftShadowMap has been deprecated. Using PCFShadowMap instead.
+[2m2:22:45 a. m.[22m [33m[1m[vite][22m[39m [33m[2m(client)[22m[39m [2m[console.warn] [22mTHREE.WebGLShadowMap: PCFSoftShadowMap has been deprecated. Using PCFShadowMap instead.
+[2m2:23:00 a. m.[22m [33m[1m[vite][22m[39m [33m[2m(client)[22m[39m [2m[console.warn] [22mTHREE.WebGLShadowMap: PCFSoftShadowMap has been deprecated. Using PCFShadowMap instead.
+[2m2:24:00 a. m.[22m [33m[1m[vite][22m[39m [33m[2m(client)[22m[39m [2m[console.warn] [22mTHREE.WebGLShadowMap: PCFSoftShadowMap has been deprecated. Using PCFShadowMap instead.
+[2m2:24:19 a. m.[22m [33m[1m[vite][22m[39m [33m[2m(client)[22m[39m [2m[console.warn] [22mTHREE.WebGLShadowMap: PCFSoftShadowMap has been deprecated. Using PCFShadowMap instead.
+[2m3:19:25 a. m.[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m Pre-transform error: Failed to load url /src/ui/GameHud.js (resolved id: D:/wamp64/www/pixel-game/src/ui/GameHud.js) in D:/wamp64/www/pixel-game/src/core/Game.js. Does the file exist?
+[2m3:20:22 a. m.[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m [31m[Unhandled error] [1mTypeError[22m: Cannot read properties of undefined (reading 'on')
+[39m > new GameHud src/ui/GameHud.js?t=1786864822195:96:16
+ > new Game src/core/Game.js?t=1786864822195:25:16
+ > src/main.js?t=1786864822195:13:10
+
+[2m3:20:30 a. m.[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m [31m[Unhandled error] [1mTypeError[22m: Cannot read properties of undefined (reading 'on')
+[39m > new GameHud src/ui/GameHud.js?t=1786864830536:94:16
+ > new Game src/core/Game.js?t=1786864830536:25:16
+ > src/main.js?t=1786864830536:13:10
+
+[2m3:20:43 a. m.[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m [2m[console.error] [22m[vite] Failed to reload /style.css. This could be due to syntax errors or importing non-existent modules. (see errors above)
+[2m3:22:41 a. m.[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m Pre-transform error: Failed to load url /src/core/Game.js (resolved id: D:/wamp64/www/pixel-game/src/core/Game.js) in D:/wamp64/www/pixel-game/src/main.js. Does the file exist?
