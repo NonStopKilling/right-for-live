@@ -1,6 +1,0 @@
-{"type":"owner-pid-invalid","pid":1,"reason":"dead at startup"}
-{"type":"server-started","port":62414,"host":"127.0.0.1","url_host":"localhost","url":"http://localhost:62414","screen_dir":"D:\\wamp64\\www\\pixel-game\\.superpowers\\brainstorm\\1294-1786859309\\content","state_dir":"D:\\wamp64\\www\\pixel-game\\.superpowers\\brainstorm\\1294-1786859309\\state"}
-{"type":"screen-added","file":"D:\\wamp64\\www\\pixel-game\\.superpowers\\brainstorm\\1294-1786859309\\content\\vegetation-rendering-direction.html"}
-{"type":"screen-added","file":"D:\\wamp64\\www\\pixel-game\\.superpowers\\brainstorm\\1294-1786859309\\content\\block-scale-vegetation.html"}
-{"type":"screen-updated","file":"D:\\wamp64\\www\\pixel-game\\.superpowers\\brainstorm\\1294-1786859309\\content\\block-scale-vegetation.html"}
-{"type":"server-stopped","reason":"idle timeout"}
