@@ -207,7 +207,7 @@ button {
   bottom: 16px;
   left: 14px;
   display: grid;
-  grid-template-columns: repeat(3, 68px);
+  grid-template-columns: repeat(4, 68px);
   min-height: 58px;
   padding: 8px;
 }
@@ -253,6 +253,11 @@ button {
 .hud-resource--artifact .hud-swatch {
   background: #59dfc8;
   box-shadow: 2px 2px 0 #17685f;
+}
+
+.hud-resource--potion .hud-swatch {
+  background: #d96f8f;
+  box-shadow: 2px 2px 0 #6d263f;
 }
 
 .hud-objective {
@@ -492,7 +497,7 @@ button {
   .hud-resources {
     bottom: 76px;
     left: 8px;
-    grid-template-columns: repeat(3, 48px);
+    grid-template-columns: repeat(4, 38px);
     min-height: 54px;
     padding: 6px;
   }
@@ -553,7 +558,7 @@ button {
   }
 
   .hud-resources {
-    grid-template-columns: repeat(3, 44px);
+    grid-template-columns: repeat(4, 36px);
   }
 
   .hud-objective {

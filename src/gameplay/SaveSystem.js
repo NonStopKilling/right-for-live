@@ -62,7 +62,8 @@ export class SaveSystem {
       towers: sanitizeTowers(snapshot.towers),
       activeCheckpointId:
         typeof snapshot.activeCheckpointId === 'string' ? snapshot.activeCheckpointId : null,
-      storyStep: sanitizeCount(snapshot.storyStep, 3)
+      storyStep: sanitizeCount(snapshot.storyStep, 3),
+      northProgress: sanitizeNorthProgress(snapshot.northProgress)
     };
   }
 
@@ -75,11 +76,12 @@ export class SaveSystem {
 export function createFreshSave() {
   return {
     version: SAVE_VERSION,
-    inventory: { wood: 0, stone: 0, artifact: 0, ammoReserve: 24 },
+    inventory: { wood: 0, stone: 0, artifact: 0, healingPotion: 0, ammoReserve: 24 },
     magazine: 6,
     towers: [],
     activeCheckpointId: null,
-    storyStep: 0
+    storyStep: 0,
+    northProgress: { targetIndex: 0, bestDistance: 0 }
   };
 }
 
@@ -88,7 +90,15 @@ function sanitizeInventory(inventory) {
     wood: sanitizeCount(inventory?.wood),
     stone: sanitizeCount(inventory?.stone),
     artifact: sanitizeCount(inventory?.artifact),
+    healingPotion: sanitizeCount(inventory?.healingPotion),
     ammoReserve: sanitizeCount(inventory?.ammoReserve)
+  };
+}
+
+function sanitizeNorthProgress(progress) {
+  return {
+    targetIndex: sanitizeCount(progress?.targetIndex, 1),
+    bestDistance: sanitizeCount(progress?.bestDistance)
   };
 }
 

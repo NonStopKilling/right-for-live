@@ -2,8 +2,17 @@ const RESOURCE_LABELS = {
   wood: 'MADERA',
   stone: 'PIEDRA',
   artifact: 'EXTRANO',
+  healingPotion: 'POCION',
   ammoReserve: 'BALAS'
 };
+
+const POTION_BLOCK_REASONS = {
+  resources: 'FALTAN OBJETOS EXTRANOS',
+  empty: 'SIN POCIONES',
+  'full-health': 'VIDA COMPLETA'
+};
+
+const IDLE_CONTROLS = 'WASD mover / E recolectar / B construir / R recargar / C crear pocion / 1 usar pocion / M sonido';
 
 const BUILD_REASONS = {
   aim: 'APUNTA AL TERRENO',
@@ -51,6 +60,7 @@ export class GameHud {
         <div class="hud-resource hud-resource--wood"><span class="hud-swatch"></span><b data-hud="wood">0</b><small>MADERA</small></div>
         <div class="hud-resource hud-resource--stone"><span class="hud-swatch"></span><b data-hud="stone">0</b><small>PIEDRA</small></div>
         <div class="hud-resource hud-resource--artifact"><span class="hud-swatch"></span><b data-hud="artifact">0</b><small>EXTRANO</small></div>
+        <div class="hud-resource hud-resource--potion"><span class="hud-swatch"></span><b data-hud="healingPotion">0</b><small>POCION</small></div>
       </section>
 
       <button class="hud-objective hud-frame" type="button" data-action="story" aria-label="Abrir transmision actual">
@@ -62,7 +72,7 @@ export class GameHud {
       <div class="hud-context hud-frame" data-hud="context" aria-live="polite">
         <b data-hud="context-label">EXPLORA EL BOSQUE</b>
         <div class="hud-context-progress"><i data-hud="context-fill"></i></div>
-        <small data-hud="context-detail">E recolecta / B construye / clic dispara</small>
+        <small data-hud="context-detail">${IDLE_CONTROLS}</small>
       </div>
 
       <div class="hud-notification" data-hud="notification" aria-live="polite"></div>
@@ -104,6 +114,18 @@ export class GameHud {
       eventBus.on('tower:leveled', ({ tower }) => this.showNotification(`TORRE NIVEL ${tower.level}`)),
       eventBus.on('tower:placement-blocked', ({ reason }) => {
         this.showNotification(BUILD_REASONS[reason] ?? 'NO SE PUEDE CONSTRUIR');
+      }),
+      eventBus.on('potion:crafted', ({ count }) => {
+        this.showNotification(`POCION CREADA x${count}`);
+      }),
+      eventBus.on('potion:used', ({ healed }) => {
+        this.showNotification(`+${healed} VIDA`);
+      }),
+      eventBus.on('potion:blocked', ({ reason }) => {
+        this.showNotification(POTION_BLOCK_REASONS[reason] ?? 'NO SE PUEDE USAR');
+      }),
+      eventBus.on('objective:north-milestone', ({ completedTarget }) => {
+        this.showNotification(`HITO NORTE ${completedTarget} M`);
       })
     ];
   }
@@ -119,6 +141,7 @@ export class GameHud {
     this.refs.wood.textContent = String(state.inventory.wood);
     this.refs.stone.textContent = String(state.inventory.stone);
     this.refs.artifact.textContent = String(state.inventory.artifact);
+    this.refs.healingPotion.textContent = String(state.inventory.healingPotion);
 
     if (state.tower) {
       this.refs['checkpoint-name'].textContent = `REFUGIO ${String(state.tower.number).padStart(2, '0')}`;
@@ -130,8 +153,8 @@ export class GameHud {
       this.refs['tower-meta'].textContent = 'SIN TORRE';
     }
 
-    this.refs['objective-title'].textContent = state.story.title;
-    this.refs['objective-hint'].textContent = state.story.hint;
+    this.refs['objective-title'].textContent = state.objective?.title ?? state.story.title;
+    this.refs['objective-hint'].textContent = state.objective?.hint ?? state.story.hint;
     this.updateContext(state);
     this.updateTransmission(state.story);
     this.updateDeath(state.respawn);
@@ -151,8 +174,8 @@ export class GameHud {
   }
 
   updateContext(state) {
-    let label = 'EXPLORA EL BOSQUE';
-    let detail = 'E recolecta / B construye / clic dispara';
+    let label = 'CONTROLES';
+    let detail = IDLE_CONTROLS;
     let progress = 0;
 
     if (state.respawn.active) {

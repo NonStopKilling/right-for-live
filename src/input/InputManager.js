@@ -6,6 +6,8 @@ export class InputManager {
     this.chunkDebugToggle = false;
     this.reloadRequested = false;
     this.buildToggleRequested = false;
+    this.craftPotionRequested = false;
+    this.usePotionRequested = false;
     this.cancelRequested = false;
     this.muteToggleRequested = false;
     this.primaryActionRequested = false;
@@ -59,6 +61,14 @@ export class InputManager {
     return this.consumeFlag('buildToggleRequested');
   }
 
+  consumeCraftPotion() {
+    return this.consumeFlag('craftPotionRequested');
+  }
+
+  consumeUsePotion() {
+    return this.consumeFlag('usePotionRequested');
+  }
+
   consumeCancel() {
     return this.consumeFlag('cancelRequested');
   }
@@ -97,6 +107,10 @@ export class InputManager {
       this.reloadRequested = true;
     } else if (event.code === 'KeyB') {
       this.buildToggleRequested = true;
+    } else if (event.code === 'KeyC') {
+      this.craftPotionRequested = true;
+    } else if (event.code === 'Digit1') {
+      this.usePotionRequested = true;
     } else if (event.code === 'Escape') {
       this.cancelRequested = true;
     } else if (event.code === 'KeyM') {

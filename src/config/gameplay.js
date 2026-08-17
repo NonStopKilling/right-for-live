@@ -6,6 +6,15 @@ export const GAMEPLAY = Object.freeze({
     criticalHealth: 28,
     respawnDelay: 1.8
   }),
+  potion: Object.freeze({
+    artifactCost: 10,
+    healAmount: 45
+  }),
+  northObjective: Object.freeze({
+    direction: -1,
+    targets: Object.freeze([350, 700]),
+    saveStep: 10
+  }),
   weapon: Object.freeze({
     magazineSize: 6,
     startingReserve: 24,

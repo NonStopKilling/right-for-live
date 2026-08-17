@@ -1,6 +1,6 @@
 import { GAMEPLAY } from '../config/gameplay.js';
 
-const RESOURCE_KEYS = Object.freeze(['wood', 'stone', 'artifact', 'ammoReserve']);
+const RESOURCE_KEYS = Object.freeze(['wood', 'stone', 'artifact', 'ammoReserve', 'healingPotion']);
 
 export class Inventory {
   constructor(eventBus, initialState = {}) {
@@ -9,6 +9,7 @@ export class Inventory {
       wood: 0,
       stone: 0,
       artifact: 0,
+      healingPotion: 0,
       ammoReserve: GAMEPLAY.weapon.startingReserve,
       ...initialState
     });

@@ -5,7 +5,9 @@ import { VISUAL_PROFILES } from '../src/config/visualProfiles.js';
 import { GAMEPLAY } from '../src/config/gameplay.js';
 import { EventBus } from '../src/core/EventBus.js';
 import { CombatSystem } from '../src/gameplay/CombatSystem.js';
+import { CraftingSystem } from '../src/gameplay/CraftingSystem.js';
 import { Inventory } from '../src/gameplay/Inventory.js';
+import { ObjectiveSystem } from '../src/gameplay/ObjectiveSystem.js';
 import { createFreshSave, SaveSystem } from '../src/gameplay/SaveSystem.js';
 import { TowerSystem } from '../src/gameplay/TowerSystem.js';
 import { ZombieSystem } from '../src/gameplay/ZombieSystem.js';
@@ -33,7 +35,13 @@ test('Inventory rejects overspending and never becomes negative', () => {
   assert.equal(inventory.spend({ wood: 6 }), false);
   assert.equal(inventory.get('wood'), 5);
   assert.equal(inventory.spend({ wood: 4, stone: 2 }), true);
-  assert.deepEqual(inventory.snapshot(), { wood: 1, stone: 0, artifact: 0, ammoReserve: 3 });
+  assert.deepEqual(inventory.snapshot(), {
+    wood: 1,
+    stone: 0,
+    artifact: 0,
+    ammoReserve: 3,
+    healingPotion: 0
+  });
 });
 
 test('SaveSystem round trips towers and rejects corrupted data', () => {
@@ -49,6 +57,66 @@ test('SaveSystem round trips towers and rejects corrupted data', () => {
   storage.setItem('voxel-survival-save-v1', '{broken');
   assert.equal(saves.load(), null);
   assert.equal(storage.getItem('voxel-survival-save-v1'), null);
+});
+
+test('SaveSystem adds potion and north-progress defaults to old save shapes', () => {
+  const saves = new SaveSystem(new MemoryStorage());
+  const loaded = saves.sanitize({
+    version: 1,
+    inventory: { wood: 1, stone: 2, artifact: 3, ammoReserve: 4 },
+    magazine: 5,
+    towers: [],
+    activeCheckpointId: null,
+    storyStep: 1
+  });
+
+  assert.equal(loaded.inventory.healingPotion, 0);
+  assert.deepEqual(loaded.northProgress, { targetIndex: 0, bestDistance: 0 });
+});
+
+test('CraftingSystem crafts and uses healing potions', () => {
+  const bus = new EventBus();
+  const inventory = new Inventory(bus, { artifact: 10 });
+  const player = createPlayerMock();
+  player.health = 40;
+  player.heal = function heal(amount) {
+    const previous = this.health;
+    this.health = Math.min(this.maxHealth, this.health + amount);
+    return this.health - previous;
+  };
+  const crafting = new CraftingSystem(player, inventory, bus, silentAudio);
+
+  assert.equal(crafting.craftHealingPotion(), true);
+  assert.equal(inventory.get('artifact'), 0);
+  assert.equal(inventory.get('healingPotion'), 1);
+  assert.equal(crafting.useHealingPotion(), true);
+  assert.equal(player.health, 85);
+  assert.equal(inventory.get('healingPotion'), 0);
+});
+
+test('CraftingSystem blocks invalid potion actions without spending inventory', () => {
+  const crafting = new CraftingSystem(createPlayerMock(), new Inventory(new EventBus()), new EventBus(), silentAudio);
+
+  assert.equal(crafting.craftHealingPotion(), false);
+  assert.equal(crafting.inventory.get('artifact'), 0);
+  assert.equal(crafting.useHealingPotion(), false);
+  assert.equal(crafting.inventory.get('healingPotion'), 0);
+});
+
+test('ObjectiveSystem tracks north progress and milestones once', () => {
+  const bus = new EventBus();
+  const milestones = [];
+  bus.on('objective:north-milestone', (event) => milestones.push(event.completedTarget));
+  const player = { position: new THREE.Vector3(0, 0, 0) };
+  const objectives = new ObjectiveSystem(player, bus, silentAudio);
+
+  player.position.z = -351;
+  objectives.update();
+  objectives.update();
+
+  assert.equal(objectives.snapshot().targetIndex, 1);
+  assert.equal(Math.floor(objectives.snapshot().bestDistance), 351);
+  assert.deepEqual(milestones, [350]);
 });
 
 test('Procedural tree resource IDs are deterministic', () => {

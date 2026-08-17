@@ -3,7 +3,9 @@ import { AudioManager } from '../audio/AudioManager.js';
 import { resolveVisualProfile } from '../config/visualProfiles.js';
 import { Player } from '../entities/Player.js';
 import { CombatSystem } from '../gameplay/CombatSystem.js';
+import { CraftingSystem } from '../gameplay/CraftingSystem.js';
 import { Inventory } from '../gameplay/Inventory.js';
+import { ObjectiveSystem } from '../gameplay/ObjectiveSystem.js';
 import { ResourceSystem } from '../gameplay/ResourceSystem.js';
 import { RespawnSystem } from '../gameplay/RespawnSystem.js';
 import { createFreshSave, SaveSystem } from '../gameplay/SaveSystem.js';
@@ -25,7 +27,11 @@ const SAVE_EVENTS = [
   'tower:built',
   'tower:progress',
   'tower:leveled',
-  'story:advanced'
+  'story:advanced',
+  'potion:crafted',
+  'potion:used',
+  'objective:north-progress',
+  'objective:north-milestone'
 ];
 
 export class Game {
@@ -84,6 +90,18 @@ export class Game {
       this.inventory,
       this.eventBus,
       this.audio
+    );
+    this.crafting = new CraftingSystem(
+      this.player,
+      this.inventory,
+      this.eventBus,
+      this.audio
+    );
+    this.objectives = new ObjectiveSystem(
+      this.player,
+      this.eventBus,
+      this.audio,
+      this.saveState.northProgress
     );
     this.respawn = new RespawnSystem(
       this.player,
@@ -231,8 +249,10 @@ export class Game {
     );
     const acceptsCombatInput = !paused && !this.towers.buildMode && !primaryConsumed;
     this.combat.update(deltaTime, this.input, acceptsCombatInput, acceptsCombatInput);
+    this.crafting.update(this.input, paused);
     this.zombies.update(deltaTime, paused);
     this.respawn.update(deltaTime);
+    this.objectives.update();
     this.cameraController.update(deltaTime, this.player.position);
     this.updateLightingPosition();
     this.updateHud(deltaTime);
@@ -247,6 +267,7 @@ export class Game {
       build: this.towers.getBuildSnapshot(),
       tower: this.towers.getActiveSnapshot(),
       story: this.story.getSnapshot(),
+      objective: this.objectives.getSnapshot(),
       respawn: this.respawn.getSnapshot(),
       audioEnabled: this.audio.isEnabled()
     });
@@ -260,7 +281,8 @@ export class Game {
       magazine: this.combat.magazine,
       towers: towerState.towers,
       activeCheckpointId: towerState.activeCheckpointId,
-      storyStep: this.story.stepIndex
+      storyStep: this.story.stepIndex,
+      northProgress: this.objectives.snapshot()
     };
   }
 

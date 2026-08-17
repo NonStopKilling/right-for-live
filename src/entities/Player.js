@@ -161,6 +161,16 @@ export class Player {
     return previous - this.health;
   }
 
+  heal(amount) {
+    if (this.isDead || amount <= 0 || this.health >= this.maxHealth) {
+      return 0;
+    }
+
+    const previous = this.health;
+    this.health = Math.min(this.maxHealth, this.health + amount);
+    return this.health - previous;
+  }
+
   respawn(position) {
     this.position.copy(position);
     this.position.y += 0.025;
