@@ -1,15 +1,9 @@
-# This Git repository is intended to track only the Pixel Game project.
-/*
-!/.gitignore
-!/pixel-game/
-
-# Pixel Game generated/runtime files.
-/pixel-game/node_modules/
-/pixel-game/server/node_modules/
-/pixel-game/dist/
-/pixel-game/.playwright-artifacts/
-/pixel-game/.superpowers/
-/pixel-game/test-results/
-/pixel-game/.vite-dev.*.log
-/pixel-game/server/data/*.json
-/pixel-game/server/.server.*.log
+node_modules/
+server/node_modules/
+dist/
+.playwright-artifacts/
+.superpowers/
+test-results/
+.vite-dev.*.log
+server/data/*.json
+server/.server.*.log
