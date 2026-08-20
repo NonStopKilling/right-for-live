@@ -54,8 +54,11 @@ export class Terrain {
     const broadElevation = valueNoise2D(gx, gz, 46, WORLD.seed + 109);
     const moisture = valueNoise2D(gx, gz, 31, WORLD.seed + 211);
     const geology = valueNoise2D(gx, gz, 23, WORLD.seed + 307);
+    const basin = valueNoise2D(gx, gz, 19, WORLD.seed + 239);
+    const biome = valueNoise2D(gx, gz, 54, WORLD.seed + 257);
     let forest = valueNoise2D(gx, gz, 36, WORLD.seed + 401);
     const distanceFromOrigin = Math.hypot(gx, gz);
+    const northDistance = Math.max(0, -gz);
 
     if (distanceFromOrigin > WORLD.originClearRadius && distanceFromOrigin < 25) {
       forest = clamp(forest + 0.29, 0, 1);
@@ -81,6 +84,18 @@ export class Terrain {
       surface = 'trail';
     }
 
+    const water = !this.isTrail(gx, gz) &&
+      distanceFromOrigin > WORLD.originClearRadius + 4 &&
+      northDistance > 28 &&
+      moisture > 0.66 &&
+      basin > 0.58 &&
+      level <= 3;
+
+    if (water) {
+      surface = moisture > 0.78 ? 'moss' : 'soil';
+      forest = clamp(forest - 0.18, 0, 1);
+    }
+
     return {
       gx,
       gz,
@@ -89,6 +104,8 @@ export class Terrain {
       moisture,
       geology,
       forest,
+      biome,
+      water,
       walkable: true
     };
   }
@@ -240,6 +257,15 @@ export class Terrain {
   isWalkableWorld(x, z) {
     const { gx, gz } = this.worldToGrid(x, z);
     return this.getCell(gx, gz).walkable;
+  }
+
+  isWaterGrid(gx, gz) {
+    return this.getCell(gx, gz).water;
+  }
+
+  isWaterWorld(x, z) {
+    const { gx, gz } = this.worldToGrid(x, z);
+    return this.isWaterGrid(gx, gz);
   }
 
   gridToWorld(gx, gz) {

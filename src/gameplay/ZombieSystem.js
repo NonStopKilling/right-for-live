@@ -312,8 +312,9 @@ export class ZombieSystem {
       return this.assetsByTier.get(visualTier);
     }
 
-    const base = COLOR.setHSL(0.29 - visualTier * 0.018, 0.34 + visualTier * 0.035, 0.34).getHex();
-    const head = COLOR.setHex(base).offsetHSL(0.02, 0.02, 0.09).getHex();
+    const base = COLOR.setHSL(0.29 - visualTier * 0.026, 0.34 + visualTier * 0.06, 0.34 - visualTier * 0.018).getHex();
+    const head = COLOR.setHex(base).offsetHSL(0.02, 0.04, 0.08).getHex();
+    const eye = COLOR.setHSL(0.04 - visualTier * 0.008, 1, 0.58 + visualTier * 0.035).getHex();
     const assets = {
       ...this.sharedGeometries,
       ...this.sharedMaterials,
@@ -325,6 +326,12 @@ export class ZombieSystem {
       headMaterial: new THREE.MeshStandardMaterial({
         color: head,
         roughness: 0.88,
+        flatShading: true
+      }),
+      eyeMaterial: new THREE.MeshBasicMaterial({ color: eye, toneMapped: false }),
+      boneMaterial: new THREE.MeshStandardMaterial({
+        color: visualTier >= 4 ? 0x4d1f22 : 0xd8d2a4,
+        roughness: 0.82,
         flatShading: true
       })
     };
@@ -339,7 +346,10 @@ export class ZombieSystem {
       headGeometry: new THREE.BoxGeometry(0.36, 0.34, 0.34),
       armGeometry: new THREE.BoxGeometry(0.16, 0.42, 0.16),
       eyeGeometry: new THREE.BoxGeometry(0.065, 0.065, 0.04),
-      healthGeometry: new THREE.BoxGeometry(0.52, 0.055, 0.035)
+      healthGeometry: new THREE.BoxGeometry(0.52, 0.055, 0.035),
+      spikeGeometry: new THREE.BoxGeometry(0.12, 0.2, 0.12),
+      jawGeometry: new THREE.BoxGeometry(0.3, 0.08, 0.08),
+      spineGeometry: new THREE.BoxGeometry(0.09, 0.2, 0.09)
     };
   }
 
@@ -363,6 +373,8 @@ export class ZombieSystem {
     this.assetsByTier.forEach((assets) => {
       assets.bodyMaterial.dispose();
       assets.headMaterial.dispose();
+      assets.eyeMaterial.dispose();
+      assets.boneMaterial.dispose();
     });
     this.assetsByTier.clear();
     this.lootGeometry.dispose();

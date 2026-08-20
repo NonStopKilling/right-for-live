@@ -40,6 +40,27 @@ const TREE_VARIANTS = {
     step: 0.27,
     slabHeight: 0.18
   },
+  fan: {
+    trunkHeight: 0.86,
+    trunkWidth: 0.19,
+    layers: 5,
+    widths: [1.52, 1.36, 1.7, 1.12, 0.62],
+    crownY: 0.88,
+    step: 0.23,
+    slabHeight: 0.16
+  },
+  bent: {
+    trunkHeight: 0.74,
+    trunkWidth: 0.16,
+    layers: 6,
+    baseWidth: 1.0,
+    tipWidth: 0.16,
+    crownY: 0.65,
+    step: 0.35,
+    slabHeight: 0.16,
+    taperPower: 0.82,
+    lean: 0.13
+  },
   sapling: {
     trunkHeight: 0.4,
     trunkWidth: 0.1,
@@ -139,7 +160,7 @@ export class TreeSystem {
   }
 
   shouldPlaceTree(cell) {
-    if (cell.surface !== 'meadow' && cell.surface !== 'moss' && cell.surface !== 'soil') {
+    if (cell.water || (cell.surface !== 'meadow' && cell.surface !== 'moss' && cell.surface !== 'soil')) {
       return false;
     }
 
@@ -173,7 +194,7 @@ export class TreeSystem {
   }
 
   shouldPlaceBush(cell) {
-    if (cell.surface !== 'meadow' && cell.surface !== 'moss') {
+    if (cell.water || (cell.surface !== 'meadow' && cell.surface !== 'moss')) {
       return false;
     }
 
@@ -230,9 +251,9 @@ export class TreeSystem {
       const band = layer % 2 === 0 ? 1.04 : 0.96;
 
       const block = {
-        x,
+        x: x + (variant.lean ?? 0) * normalized * Math.cos(rotation),
         y: baseY + (variant.crownY + layer * variant.step) * heightScale,
-        z,
+        z: z + (variant.lean ?? 0) * normalized * Math.sin(rotation),
         rotation,
         scaleX: width,
         scaleY: variant.slabHeight * heightScale,
@@ -285,12 +306,20 @@ export class TreeSystem {
   }
 
   resolveVariant(variety, forest) {
-    if (variety > 0.79) {
+    if (variety > 0.88) {
+      return 'fan';
+    }
+
+    if (variety > 0.76) {
       return 'broad';
     }
 
-    if (variety > 0.49) {
+    if (variety > 0.56) {
       return forest > 0.67 ? 'spire' : 'needle';
+    }
+
+    if (variety > 0.39) {
+      return 'bent';
     }
 
     if (variety < 0.17) {

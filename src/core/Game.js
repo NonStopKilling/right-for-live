@@ -27,6 +27,7 @@ const SAVE_EVENTS = [
   'tower:built',
   'tower:progress',
   'tower:leveled',
+  'tower:dismantled',
   'story:advanced',
   'potion:crafted',
   'potion:used',
@@ -120,7 +121,8 @@ export class Game {
     this.hud = new GameHud(this.root, this.eventBus, {
       toggleSound: () => this.audio.toggle(),
       reopenStory: () => this.story.reopen(),
-      dismissStory: () => this.story.dismiss()
+      dismissStory: () => this.story.dismiss(),
+      dismantleTower: (id) => this.towers.dismantleTower(id)
     });
     this.animationFrameId = 0;
     this.isRunning = false;
@@ -266,6 +268,7 @@ export class Game {
       resource: this.resources.getSnapshot(),
       build: this.towers.getBuildSnapshot(),
       tower: this.towers.getActiveSnapshot(),
+      towers: this.towers.getListSnapshot(),
       story: this.story.getSnapshot(),
       objective: this.objectives.getSnapshot(),
       respawn: this.respawn.getSnapshot(),

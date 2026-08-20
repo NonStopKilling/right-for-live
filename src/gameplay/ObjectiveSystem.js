@@ -13,6 +13,7 @@ export class ObjectiveSystem {
     this.bestDistance = sanitizeDistance(initialProgress?.bestDistance);
     this.lastSavedDistance = this.bestDistance;
     this.completedTargetIndex = this.targetIndex - 1;
+    this.northCompleteEmitted = Boolean(initialProgress?.complete);
   }
 
   update() {
@@ -39,6 +40,11 @@ export class ObjectiveSystem {
         ...this.getSnapshot(),
         completedTarget
       });
+
+      if (this.getSnapshot().complete && !this.northCompleteEmitted) {
+        this.northCompleteEmitted = true;
+        this.eventBus.emit('objective:north-complete', this.getSnapshot());
+      }
     }
   }
 
@@ -64,7 +70,8 @@ export class ObjectiveSystem {
   snapshot() {
     return {
       targetIndex: this.targetIndex,
-      bestDistance: this.bestDistance
+      bestDistance: this.bestDistance,
+      complete: this.northCompleteEmitted
     };
   }
 }

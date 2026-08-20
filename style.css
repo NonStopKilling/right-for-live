@@ -207,7 +207,7 @@ button {
   bottom: 16px;
   left: 14px;
   display: grid;
-  grid-template-columns: repeat(4, 68px);
+  grid-template-columns: repeat(5, 62px);
   min-height: 58px;
   padding: 8px;
 }
@@ -258,6 +258,87 @@ button {
 .hud-resource--potion .hud-swatch {
   background: #d96f8f;
   box-shadow: 2px 2px 0 #6d263f;
+}
+
+.hud-resource--xp .hud-swatch {
+  background: #e4d66d;
+  box-shadow: 2px 2px 0 #6e6231;
+}
+
+.hud-tower-list {
+  position: absolute;
+  top: 108px;
+  right: 14px;
+  width: 236px;
+  max-height: min(312px, calc(100vh - 206px));
+  padding: 9px;
+  overflow: hidden;
+}
+
+.hud-tower-list__items {
+  display: grid;
+  gap: 5px;
+  max-height: 264px;
+  margin-top: 7px;
+  overflow: auto;
+  padding-right: 2px;
+  pointer-events: auto;
+}
+
+.hud-tower-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 24px;
+  gap: 6px;
+  align-items: center;
+  min-height: 31px;
+  padding: 5px 5px 5px 7px;
+  border-left: 2px solid rgba(121, 198, 167, 0.26);
+  background: rgba(34, 31, 22, 0.72);
+}
+
+.hud-tower-row.is-active {
+  border-left-color: #e4d870;
+  background: rgba(51, 45, 25, 0.86);
+}
+
+.hud-tower-row b,
+.hud-tower-row small {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.hud-tower-row b {
+  color: #f0e69f;
+  font-size: 9px;
+}
+
+.hud-tower-row small,
+.hud-tower-empty {
+  color: #9ea88c;
+  font-size: 8px;
+}
+
+.hud-tower-row button {
+  display: grid;
+  width: 24px;
+  height: 24px;
+  place-items: center;
+  border: 1px solid rgba(210, 111, 87, 0.72);
+  border-radius: 2px;
+  background: #241715;
+  color: #e08467;
+  cursor: pointer;
+  font-size: 10px;
+  font-weight: 700;
+  text-shadow: none;
+}
+
+.hud-tower-row button:hover,
+.hud-tower-row button:focus-visible {
+  border-color: #f0b08d;
+  outline: none;
 }
 
 .hud-objective {
@@ -497,7 +578,7 @@ button {
   .hud-resources {
     bottom: 76px;
     left: 8px;
-    grid-template-columns: repeat(4, 38px);
+    grid-template-columns: repeat(5, 36px);
     min-height: 54px;
     padding: 6px;
   }
@@ -515,9 +596,33 @@ button {
   .hud-objective {
     right: 8px;
     bottom: 76px;
-    width: min(205px, calc(100vw - 178px));
+    width: min(185px, calc(100vw - 204px));
     min-height: 54px;
     padding: 7px 8px;
+  }
+
+  .hud-tower-list {
+    top: 98px;
+    right: 8px;
+    width: 148px;
+    max-height: min(210px, calc(100vh - 236px));
+    padding: 7px;
+  }
+
+  .hud-tower-list__items {
+    max-height: 166px;
+    gap: 4px;
+  }
+
+  .hud-tower-row {
+    grid-template-columns: minmax(0, 1fr) 22px;
+    min-height: 29px;
+    padding: 4px;
+  }
+
+  .hud-tower-row button {
+    width: 22px;
+    height: 22px;
   }
 
   .hud-objective small {
@@ -558,10 +663,10 @@ button {
   }
 
   .hud-resources {
-    grid-template-columns: repeat(4, 36px);
+    grid-template-columns: repeat(5, 34px);
   }
 
   .hud-objective {
-    width: calc(100vw - 162px);
+    width: calc(100vw - 198px);
   }
 }

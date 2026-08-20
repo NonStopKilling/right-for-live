@@ -33,7 +33,8 @@ export const GAMEPLAY = Object.freeze({
     spawnMaxRadius: 13,
     maxActive: 24,
     simulationRadius: 24,
-    threatTierDistance: 18
+    threatTierDistance: 18,
+    towerKillExperience: 4
   }),
   tower: Object.freeze({
     maxCount: 12,

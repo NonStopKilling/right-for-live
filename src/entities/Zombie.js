@@ -21,6 +21,8 @@ export class Zombie {
   }
 
   createMesh(assets) {
+    const tier = Math.max(0, this.stats.tier);
+    const size = 1 + Math.min(0.46, tier * 0.045);
     this.leftLeg = new THREE.Mesh(assets.limbGeometry, assets.darkMaterial);
     this.leftLeg.position.set(-0.13, 0.18, 0);
     this.rightLeg = this.leftLeg.clone();
@@ -40,8 +42,36 @@ export class Zombie {
 
     const eyeLeft = new THREE.Mesh(assets.eyeGeometry, assets.eyeMaterial);
     eyeLeft.position.set(-0.08, 0.96, 0.19);
+    eyeLeft.scale.setScalar(1 + Math.min(0.7, tier * 0.1));
     const eyeRight = eyeLeft.clone();
     eyeRight.position.x = 0.08;
+
+    const additions = [];
+
+    if (tier >= 1) {
+      const shoulderLeft = new THREE.Mesh(assets.spikeGeometry, assets.boneMaterial);
+      shoulderLeft.position.set(-0.29, 0.83, -0.08);
+      shoulderLeft.rotation.z = 0.42;
+      const shoulderRight = shoulderLeft.clone();
+      shoulderRight.position.x = 0.29;
+      shoulderRight.rotation.z = -0.42;
+      additions.push(shoulderLeft, shoulderRight);
+    }
+
+    if (tier >= 2) {
+      const jaw = new THREE.Mesh(assets.jawGeometry, assets.boneMaterial);
+      jaw.position.set(0, 0.8, 0.2);
+      additions.push(jaw);
+    }
+
+    if (tier >= 3) {
+      for (let index = 0; index < Math.min(4, tier); index += 1) {
+        const spine = new THREE.Mesh(assets.spineGeometry, assets.boneMaterial);
+        spine.position.set(0, 0.54 + index * 0.12, -0.23);
+        spine.rotation.x = -0.72;
+        additions.push(spine);
+      }
+    }
 
     const healthBack = new THREE.Mesh(assets.healthGeometry, assets.healthBackMaterial);
     healthBack.position.set(0, 1.2, 0);
@@ -57,7 +87,8 @@ export class Zombie {
       this.leftArm,
       this.rightArm,
       eyeLeft,
-      eyeRight
+      eyeRight,
+      ...additions
     ].forEach((mesh) => {
       mesh.castShadow = true;
       mesh.receiveShadow = true;
@@ -72,9 +103,11 @@ export class Zombie {
       this.rightArm,
       eyeLeft,
       eyeRight,
+      ...additions,
       healthBack,
       this.healthFill
     );
+    this.group.scale.setScalar(size);
   }
 
   update(deltaTime, targetPosition, world, stopDistance = 0.68) {

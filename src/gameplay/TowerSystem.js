@@ -185,6 +185,10 @@ export class TowerSystem {
       return { valid: false, reason: 'slope' };
     }
 
+    if (this.world.terrain.isWaterGrid?.(gx, gz)) {
+      return { valid: false, reason: 'water' };
+    }
+
     return { valid: true, reason: null };
   }
 
@@ -226,7 +230,10 @@ export class TowerSystem {
     }
 
     const leveled = tower.addKill(GAMEPLAY.tower.levels);
+    const experience = GAMEPLAY.zombie.towerKillExperience + (event.tier ?? 0);
+    this.inventory.add('experience', experience, 'tower-kill');
     this.eventBus.emit('tower:progress', { tower: tower.snapshot(), leveled });
+    this.eventBus.emit('player:experience', { amount: experience, source: 'tower-kill' });
 
     if (leveled) {
       this.audio.play('level-up');
@@ -288,6 +295,36 @@ export class TowerSystem {
     return this.getTowerById(this.activeCheckpointId);
   }
 
+  dismantleTower(id) {
+    const index = this.towers.findIndex((tower) => tower.id === id);
+
+    if (index === -1) {
+      return false;
+    }
+
+    const [tower] = this.towers.splice(index, 1);
+    const wasActive = tower.id === this.activeCheckpointId;
+    const snapshot = tower.snapshot();
+    tower.dispose();
+
+    if (wasActive) {
+      this.activeCheckpointId = this.towers.at(-1)?.id ?? null;
+    }
+
+    const refund = {
+      wood: Math.floor(GAMEPLAY.tower.cost.wood * 0.5),
+      stone: Math.floor(GAMEPLAY.tower.cost.stone * 0.5)
+    };
+    Object.entries(refund).forEach(([resource, amount]) => this.inventory.add(resource, amount, 'tower-dismantle'));
+    this.audio.play('close');
+    this.eventBus.emit('tower:dismantled', {
+      tower: snapshot,
+      refund,
+      activeCheckpointId: this.activeCheckpointId
+    });
+    return true;
+  }
+
   getRespawnPoint() {
     const tower = this.getActiveTower();
     return tower ? tower.position.clone().add(new THREE.Vector3(0.8, 0, 0.8)) : this.world.getSpawnPoint();
@@ -330,6 +367,20 @@ export class TowerSystem {
       damage: definition.damage,
       nextLevelKills: nextDefinition?.kills ?? definition.kills
     };
+  }
+
+  getListSnapshot() {
+    return this.towers.map((tower, index) => {
+      const definition = GAMEPLAY.tower.levels[tower.level - 1];
+      const nextDefinition = GAMEPLAY.tower.levels[tower.level] ?? null;
+      return {
+        ...tower.snapshot(),
+        number: index + 1,
+        active: tower.id === this.activeCheckpointId,
+        damage: definition.damage,
+        nextLevelKills: nextDefinition?.kills ?? definition.kills
+      };
+    });
   }
 
   createAssets() {

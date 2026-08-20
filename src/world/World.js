@@ -4,6 +4,7 @@ import { LandmarkSystem } from './LandmarkSystem.js';
 import { PropSystem } from './PropSystem.js';
 import { Terrain } from './Terrain.js';
 import { TreeSystem } from './TreeSystem.js';
+import { WaterSystem } from './WaterSystem.js';
 
 export class World {
   constructor(profile) {
@@ -26,6 +27,7 @@ export class World {
     this.terrain = new Terrain(profile);
     this.trees = new TreeSystem(this.terrain, profile);
     this.props = new PropSystem(this.terrain, profile);
+    this.water = new WaterSystem(this.terrain, profile);
     this.landmark = new LandmarkSystem(this.terrain, profile);
 
     this.group.add(this.landmark.group);
@@ -142,6 +144,7 @@ export class World {
     group.name = `WorldChunk-${key}`;
     const layers = {
       terrain: this.terrain.createChunkGroup(cells, key),
+      water: this.water.createChunkGroup(cells, key),
       vegetation: this.trees.createChunkGroup(cells, key, this.depletedResources),
       props: this.props.createChunkGroup(cells, key, this.depletedResources),
       debug: this.createChunkBorder(chunkX, chunkZ)
@@ -150,7 +153,7 @@ export class World {
       ...this.trees.getResourceNodes(cells),
       ...this.props.getResourceNodes(cells)
     ].map((resource) => ({ ...resource, chunkKey: key }));
-    group.add(layers.terrain, layers.vegetation, layers.props, layers.debug);
+    group.add(layers.terrain, layers.water, layers.vegetation, layers.props, layers.debug);
 
     this.chunks.set(key, { chunkX, chunkZ, cells, resources, layers, group });
     this.group.add(group);
@@ -235,6 +238,7 @@ export class World {
     this.landmark.dispose();
     this.props.dispose();
     this.trees.dispose();
+    this.water.dispose();
     this.terrain.dispose();
     this.chunkBorderGeometry.dispose();
     this.chunkBorderMaterial.dispose();

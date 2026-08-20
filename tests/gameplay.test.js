@@ -40,7 +40,8 @@ test('Inventory rejects overspending and never becomes negative', () => {
     stone: 0,
     artifact: 0,
     ammoReserve: 3,
-    healingPotion: 0
+    healingPotion: 0,
+    experience: 0
   });
 });
 
@@ -51,6 +52,7 @@ test('SaveSystem round trips towers and rejects corrupted data', () => {
   fresh.inventory.wood = 14;
   fresh.towers.push({ id: 't1', x: 2.5, z: -1.5, level: 2, kills: 9 });
   fresh.activeCheckpointId = 't1';
+  fresh.northProgress.complete = false;
   assert.equal(saves.save(fresh), true);
   assert.deepEqual(saves.load(), fresh);
 
@@ -71,7 +73,8 @@ test('SaveSystem adds potion and north-progress defaults to old save shapes', ()
   });
 
   assert.equal(loaded.inventory.healingPotion, 0);
-  assert.deepEqual(loaded.northProgress, { targetIndex: 0, bestDistance: 0 });
+  assert.equal(loaded.inventory.experience, 0);
+  assert.deepEqual(loaded.northProgress, { targetIndex: 0, bestDistance: 0, complete: false });
 });
 
 test('CraftingSystem crafts and uses healing potions', () => {
@@ -106,7 +109,9 @@ test('CraftingSystem blocks invalid potion actions without spending inventory', 
 test('ObjectiveSystem tracks north progress and milestones once', () => {
   const bus = new EventBus();
   const milestones = [];
+  const complete = [];
   bus.on('objective:north-milestone', (event) => milestones.push(event.completedTarget));
+  bus.on('objective:north-complete', (event) => complete.push(event.complete));
   const player = { position: new THREE.Vector3(0, 0, 0) };
   const objectives = new ObjectiveSystem(player, bus, silentAudio);
 
@@ -117,6 +122,15 @@ test('ObjectiveSystem tracks north progress and milestones once', () => {
   assert.equal(objectives.snapshot().targetIndex, 1);
   assert.equal(Math.floor(objectives.snapshot().bestDistance), 351);
   assert.deepEqual(milestones, [350]);
+  assert.deepEqual(complete, []);
+
+  player.position.z = -701;
+  objectives.update();
+  objectives.update();
+
+  assert.equal(objectives.snapshot().complete, true);
+  assert.deepEqual(milestones, [350, 700]);
+  assert.deepEqual(complete, [true]);
 });
 
 test('Procedural tree resource IDs are deterministic', () => {
@@ -128,6 +142,14 @@ test('Procedural tree resource IDs are deterministic', () => {
   assert.ok(first.length > 0);
   assert.deepEqual(second, first);
   trees.dispose();
+  terrain.dispose();
+});
+
+test('Terrain creates transparent-water candidate cells away from origin', () => {
+  const terrain = new Terrain(VISUAL_PROFILES.dark);
+  const waterCell = findWaterCell(terrain);
+  assert.ok(waterCell, 'expected at least one generated water cell in sampled northern wetland');
+  assert.equal(terrain.isWaterGrid(waterCell.gx, waterCell.gz), true);
   terrain.dispose();
 });
 
@@ -172,7 +194,7 @@ test('Zombie threat tiers scale health, damage, and speed', () => {
   system.dispose();
 });
 
-test('Tower construction spends resources and eight kills reach level two', () => {
+test('Tower construction spends resources, tower kills grant xp, and towers can be dismantled', () => {
   const bus = new EventBus();
   const inventory = new Inventory(bus, {
     wood: GAMEPLAY.tower.cost.wood,
@@ -196,12 +218,30 @@ test('Tower construction spends resources and eight kills reach level two', () =
 
   const tower = towers.towers[0];
   for (let index = 0; index < 8; index += 1) {
-    bus.emit('zombie:killed', { source: `tower:${tower.id}`, id: `z${index}`, loot: {} });
+    bus.emit('zombie:killed', { source: `tower:${tower.id}`, id: `z${index}`, tier: 2, loot: {} });
   }
   assert.equal(tower.level, 2);
   assert.equal(tower.kills, 8);
+  assert.equal(inventory.get('experience'), 48);
+  assert.equal(towers.dismantleTower(tower.id), true);
+  assert.equal(towers.towers.length, 0);
+  assert.equal(inventory.get('wood'), Math.floor(GAMEPLAY.tower.cost.wood * 0.5));
   towers.dispose();
 });
+
+function findWaterCell(terrain) {
+  for (let gz = -120; gz < -28; gz += 1) {
+    for (let gx = -48; gx <= 48; gx += 1) {
+      const cell = terrain.getCell(gx, gz);
+
+      if (cell.water) {
+        return cell;
+      }
+    }
+  }
+
+  return null;
+}
 
 function createWorldMock() {
   const terrain = {

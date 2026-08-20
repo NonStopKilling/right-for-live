@@ -20,6 +20,7 @@ const BUILD_REASONS = {
   resources: 'FALTAN RECURSOS',
   overlap: 'DEMASIADO CERCA DE OTRA TORRE',
   slope: 'TERRENO INESTABLE',
+  water: 'NO SE PUEDE CONSTRUIR EN AGUA',
   'max-towers': 'LIMITE DE TORRES ALCANZADO'
 };
 
@@ -61,6 +62,12 @@ export class GameHud {
         <div class="hud-resource hud-resource--stone"><span class="hud-swatch"></span><b data-hud="stone">0</b><small>PIEDRA</small></div>
         <div class="hud-resource hud-resource--artifact"><span class="hud-swatch"></span><b data-hud="artifact">0</b><small>EXTRANO</small></div>
         <div class="hud-resource hud-resource--potion"><span class="hud-swatch"></span><b data-hud="healingPotion">0</b><small>POCION</small></div>
+        <div class="hud-resource hud-resource--xp"><span class="hud-swatch"></span><b data-hud="experience">0</b><small>XP</small></div>
+      </section>
+
+      <section class="hud-tower-list hud-frame" aria-label="Torres desplegadas">
+        <div class="hud-kicker"><span>TORRES</span><span data-hud="tower-count">0/12</span></div>
+        <div class="hud-tower-list__items" data-hud="tower-list"></div>
       </section>
 
       <button class="hud-objective hud-frame" type="button" data-action="story" aria-label="Abrir transmision actual">
@@ -112,6 +119,12 @@ export class GameHud {
       }),
       eventBus.on('tower:built', () => this.showNotification('CHECKPOINT GUARDADO')),
       eventBus.on('tower:leveled', ({ tower }) => this.showNotification(`TORRE NIVEL ${tower.level}`)),
+      eventBus.on('tower:dismantled', ({ refund }) => {
+        this.showNotification(`TORRE DESLIGADA +${refund.wood} MADERA +${refund.stone} PIEDRA`);
+      }),
+      eventBus.on('player:experience', ({ amount }) => {
+        this.showNotification(`+${amount} XP POR TORRE`);
+      }),
       eventBus.on('tower:placement-blocked', ({ reason }) => {
         this.showNotification(BUILD_REASONS[reason] ?? 'NO SE PUEDE CONSTRUIR');
       }),
@@ -126,6 +139,9 @@ export class GameHud {
       }),
       eventBus.on('objective:north-milestone', ({ completedTarget }) => {
         this.showNotification(`HITO NORTE ${completedTarget} M`);
+      }),
+      eventBus.on('objective:north-complete', () => {
+        this.showNotification('700 M ALCANZADOS: LA SENAL CAMBIO');
       })
     ];
   }
@@ -142,6 +158,7 @@ export class GameHud {
     this.refs.stone.textContent = String(state.inventory.stone);
     this.refs.artifact.textContent = String(state.inventory.artifact);
     this.refs.healingPotion.textContent = String(state.inventory.healingPotion);
+    this.refs.experience.textContent = String(state.inventory.experience);
 
     if (state.tower) {
       this.refs['checkpoint-name'].textContent = `REFUGIO ${String(state.tower.number).padStart(2, '0')}`;
@@ -155,6 +172,7 @@ export class GameHud {
 
     this.refs['objective-title'].textContent = state.objective?.title ?? state.story.title;
     this.refs['objective-hint'].textContent = state.objective?.hint ?? state.story.hint;
+    this.updateTowerList(state.towers ?? []);
     this.updateContext(state);
     this.updateTransmission(state.story);
     this.updateDeath(state.respawn);
@@ -206,6 +224,31 @@ export class GameHud {
     );
   }
 
+  updateTowerList(towers) {
+    this.refs['tower-count'].textContent = `${towers.length}/12`;
+
+    if (towers.length === 0) {
+      this.refs['tower-list'].innerHTML = '<div class="hud-tower-empty">SIN TORRES</div>';
+      return;
+    }
+
+    this.refs['tower-list'].replaceChildren(...towers.map((tower) => {
+      const row = document.createElement('div');
+      row.className = `hud-tower-row${tower.active ? ' is-active' : ''}`;
+      const progress = tower.level >= 3
+        ? 'MAX'
+        : `${tower.kills}/${tower.nextLevelKills}`;
+      row.innerHTML = `
+        <div>
+          <b>T${String(tower.number).padStart(2, '0')}</b>
+          <small>N${tower.level} ${progress}</small>
+        </div>
+        <button type="button" data-action="dismantle-tower" data-tower-id="${tower.id}" aria-label="Desligar torre ${tower.number}" title="Desligar torre">X</button>
+      `;
+      return row;
+    }));
+  }
+
   updateTransmission(story) {
     this.refs.transmission.classList.toggle('is-visible', story.transmissionOpen);
 
@@ -246,6 +289,9 @@ export class GameHud {
       this.actions.reopenStory();
     } else if (action === 'dismiss-story') {
       this.actions.dismissStory();
+    } else if (action === 'dismantle-tower') {
+      const towerId = event.target.closest('[data-tower-id]')?.dataset.towerId;
+      this.actions.dismantleTower?.(towerId);
     }
   }
 

@@ -24,7 +24,9 @@ const DARK_DIORAMA = {
     { base: 0x568678, shade: 0x315b51, tip: 0xa7c96c },
     { base: 0xc1874f, shade: 0x795139, tip: 0xe6b466 },
     { base: 0xb36356, shade: 0x703f3b, tip: 0xda8967 },
-    { base: 0x4e6b3b, shade: 0x304a2e, tip: 0x8da04b }
+    { base: 0x4e6b3b, shade: 0x304a2e, tip: 0x8da04b },
+    { base: 0x365f6b, shade: 0x203f4f, tip: 0x77aab4 },
+    { base: 0x7a4d77, shade: 0x472d54, tip: 0xb7769a }
   ],
   spriteColors: [0xd3d967, 0x9bb65a, 0xe8a968, 0x81b68b],
   landmark: { core: 0xffefac, glow: 0xffd76e, light: 0xffc85b, intensity: 2.1 }
@@ -56,7 +58,9 @@ const DAYLIGHT_VOXEL = {
     { base: 0x45a990, shade: 0x287665, tip: 0x8bd5a0 },
     { base: 0xd69a42, shade: 0x9c682e, tip: 0xf1c35a },
     { base: 0xd16f4e, shade: 0x984737, tip: 0xefa067 },
-    { base: 0x347c51, shade: 0x24583e, tip: 0x72aa57 }
+    { base: 0x347c51, shade: 0x24583e, tip: 0x72aa57 },
+    { base: 0x4389a1, shade: 0x2d5c72, tip: 0x8bc8c7 },
+    { base: 0xa56aa1, shade: 0x704872, tip: 0xd194ad }
   ],
   spriteColors: [0xc9d957, 0x76bd66, 0xf0a552, 0x62b9a1],
   landmark: { core: 0xffe37d, glow: 0xffc84d, light: 0xffb941, intensity: 1.65 }

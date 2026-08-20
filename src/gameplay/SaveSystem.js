@@ -76,7 +76,7 @@ export class SaveSystem {
 export function createFreshSave() {
   return {
     version: SAVE_VERSION,
-    inventory: { wood: 0, stone: 0, artifact: 0, healingPotion: 0, ammoReserve: 24 },
+    inventory: { wood: 0, stone: 0, artifact: 0, healingPotion: 0, experience: 0, ammoReserve: 24 },
     magazine: 6,
     towers: [],
     activeCheckpointId: null,
@@ -91,6 +91,7 @@ function sanitizeInventory(inventory) {
     stone: sanitizeCount(inventory?.stone),
     artifact: sanitizeCount(inventory?.artifact),
     healingPotion: sanitizeCount(inventory?.healingPotion),
+    experience: sanitizeCount(inventory?.experience),
     ammoReserve: sanitizeCount(inventory?.ammoReserve)
   };
 }
@@ -98,7 +99,8 @@ function sanitizeInventory(inventory) {
 function sanitizeNorthProgress(progress) {
   return {
     targetIndex: sanitizeCount(progress?.targetIndex, 1),
-    bestDistance: sanitizeCount(progress?.bestDistance)
+    bestDistance: sanitizeCount(progress?.bestDistance),
+    complete: Boolean(progress?.complete)
   };
 }
 
