@@ -7,10 +7,11 @@ const FIRE_DIRECTION = new THREE.Vector3();
 const FIRE_ORIGIN = new THREE.Vector3();
 
 export class CombatSystem {
-  constructor(camera, player, zombieSystem, inventory, eventBus, audio, initialMagazine) {
+  constructor(camera, player, zombieSystem, inventory, eventBus, audio, initialMagazine, onlineNpcSystem = null) {
     this.camera = camera;
     this.player = player;
     this.zombieSystem = zombieSystem;
+    this.onlineNpcSystem = onlineNpcSystem;
     this.inventory = inventory;
     this.eventBus = eventBus;
     this.audio = audio;
@@ -92,18 +93,25 @@ export class CombatSystem {
       0,
       this.aimPoint.z - this.player.position.z
     ).normalize();
-    const target = this.zombieSystem.getRayTarget(
+    const localTarget = this.zombieSystem.getRayTarget(
       FIRE_ORIGIN,
       FIRE_DIRECTION,
       GAMEPLAY.weapon.range
     );
+    const onlineTarget = this.onlineNpcSystem?.getRayTarget(
+      FIRE_ORIGIN,
+      FIRE_DIRECTION,
+      GAMEPLAY.weapon.range
+    );
+    const target = pickNearestTarget(localTarget, onlineTarget);
     const distance = target?.distance ?? GAMEPLAY.weapon.range;
     const end = FIRE_ORIGIN.clone().addScaledVector(FIRE_DIRECTION, distance);
     end.y = this.player.position.y + 0.55;
     this.spawnTracer(FIRE_ORIGIN, end, Boolean(target));
 
     if (target) {
-      this.zombieSystem.damageZombie(target.zombie, GAMEPLAY.weapon.damage, 'player');
+      const targetSystem = target.online ? this.onlineNpcSystem : this.zombieSystem;
+      targetSystem.damageZombie(target.zombie, GAMEPLAY.weapon.damage, 'player');
     }
 
     this.audio.playGameEffect('revolver');
@@ -195,4 +203,16 @@ export class CombatSystem {
     this.tracers.length = 0;
     this.effects.clear();
   }
+}
+
+function pickNearestTarget(localTarget, onlineTarget) {
+  if (!localTarget) {
+    return onlineTarget;
+  }
+
+  if (!onlineTarget) {
+    return localTarget;
+  }
+
+  return onlineTarget.distance < localTarget.distance ? onlineTarget : localTarget;
 }

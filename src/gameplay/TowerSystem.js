@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { DEFAULT_LAB_OPTIONS } from '../config/gameOptions.js';
 import { GAMEPLAY } from '../config/gameplay.js';
 import { Tower } from '../entities/Tower.js';
 import { WORLD } from '../utils/constants.js';
@@ -13,6 +14,7 @@ export class TowerSystem {
     this.eventBus = eventBus;
     this.audio = audio;
     this.profile = profile;
+    this.options = structuredClone(DEFAULT_LAB_OPTIONS);
     this.group = new THREE.Group();
     this.group.name = 'SignalRefuges';
     this.towers = [];
@@ -38,12 +40,16 @@ export class TowerSystem {
     scene.add(this.group);
   }
 
+  applyOptions(options = {}) {
+    this.options = { ...this.options, ...options };
+  }
+
   update(deltaTime, input, aimPoint, zombieSystem, paused = false) {
     this.updateTracers(deltaTime);
     this.towers.forEach((tower) => {
       tower.update(deltaTime);
 
-      if (!paused) {
+      if (!paused && this.options.towerAutofire) {
         this.updateTowerCombat(tower, zombieSystem);
       }
     });

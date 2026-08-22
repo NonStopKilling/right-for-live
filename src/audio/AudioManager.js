@@ -1,6 +1,7 @@
 import { createUISFX } from 'uisfx';
 
 const AUDIO_PREFERENCE_KEY = 'voxel-survival-audio-v1';
+const OPTIONS_KEY = 'voxel-survival-options-v1';
 
 export class AudioManager {
   constructor(eventBus) {
@@ -14,6 +15,7 @@ export class AudioManager {
       preferences: { key: AUDIO_PREFERENCE_KEY }
     });
     this.enabled = this.ui.isEnabled();
+    this.volume = loadVolume();
     this.handleTrustedInput = this.handleTrustedInput.bind(this);
 
     window.addEventListener('pointerdown', this.handleTrustedInput, { once: true });
@@ -92,6 +94,20 @@ export class AudioManager {
     return this.enabled;
   }
 
+  setVolume(value) {
+    this.volume = Math.min(1, Math.max(0, Number(value)));
+
+    if (this.master) {
+      this.master.gain.value = this.volume;
+    }
+
+    this.eventBus?.emit('audio:volume-changed', { volume: this.volume });
+  }
+
+  getVolume() {
+    return this.volume;
+  }
+
   getContext() {
     if (this.context) {
       return this.context;
@@ -105,7 +121,7 @@ export class AudioManager {
 
     this.context = new AudioContextClass({ latencyHint: 'interactive' });
     this.master = this.context.createGain();
-    this.master.gain.value = 0.45;
+    this.master.gain.value = this.volume;
     this.master.connect(this.context.destination);
     return this.context;
   }
@@ -175,5 +191,15 @@ export class AudioManager {
       this.context = null;
       this.master = null;
     }
+  }
+}
+
+function loadVolume() {
+  try {
+    const options = JSON.parse(window.localStorage.getItem(OPTIONS_KEY) ?? '{}');
+    const value = Number(options.masterVolume);
+    return Number.isFinite(value) ? Math.min(1, Math.max(0, value / 100)) : 0.45;
+  } catch {
+    return 0.45;
   }
 }

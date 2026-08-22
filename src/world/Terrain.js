@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { DEFAULT_LAB_OPTIONS } from '../config/gameOptions.js';
 import { WORLD, clamp, fractalNoise2D, hash2D, valueNoise2D } from '../utils/constants.js';
 
 const MATRIX = new THREE.Matrix4();
@@ -10,8 +11,13 @@ const POSITION = new THREE.Vector3();
 export class Terrain {
   constructor(profile) {
     this.profile = profile;
+    this.options = structuredClone(DEFAULT_LAB_OPTIONS);
     this.geometry = new THREE.BoxGeometry(1, 1, 1);
     this.materials = this.createMaterials();
+  }
+
+  applyOptions(options = {}) {
+    this.options = { ...this.options, ...options };
   }
 
   createMaterials() {
@@ -50,13 +56,13 @@ export class Terrain {
   }
 
   getCell(gx, gz) {
-    const elevation = fractalNoise2D(gx, gz, WORLD.seed + 101);
-    const broadElevation = valueNoise2D(gx, gz, 46, WORLD.seed + 109);
-    const moisture = valueNoise2D(gx, gz, 31, WORLD.seed + 211);
-    const geology = valueNoise2D(gx, gz, 23, WORLD.seed + 307);
-    const basin = valueNoise2D(gx, gz, 19, WORLD.seed + 239);
-    const biome = valueNoise2D(gx, gz, 54, WORLD.seed + 257);
-    let forest = valueNoise2D(gx, gz, 36, WORLD.seed + 401);
+    const elevation = fractalNoise2D(gx, gz, this.seed(101));
+    const broadElevation = valueNoise2D(gx, gz, 46, this.seed(109));
+    const moisture = valueNoise2D(gx, gz, 31, this.seed(211));
+    const geology = valueNoise2D(gx, gz, 23, this.seed(307));
+    const basin = valueNoise2D(gx, gz, 19, this.seed(239));
+    const biome = valueNoise2D(gx, gz, 54, this.seed(257));
+    let forest = valueNoise2D(gx, gz, 36, this.seed(401));
     const distanceFromOrigin = Math.hypot(gx, gz);
     const northDistance = Math.max(0, -gz);
 
@@ -64,7 +70,8 @@ export class Terrain {
       forest = clamp(forest + 0.29, 0, 1);
     }
 
-    let level = 1 + Math.floor(clamp((elevation * 0.74 + broadElevation * 0.26 - 0.2) * 4.7, 0, WORLD.maxTerrainLevel - 1));
+    const relief = clamp(Number(this.options.terrainRelief) / 100, 0.35, 1.8);
+    let level = 1 + Math.floor(clamp((elevation * 0.74 + broadElevation * 0.26 - 0.2) * 4.7 * relief, 0, WORLD.maxTerrainLevel - 1));
 
     if (distanceFromOrigin < WORLD.originClearRadius) {
       level = 1;
@@ -84,10 +91,12 @@ export class Terrain {
       surface = 'trail';
     }
 
-    const water = !this.isTrail(gx, gz) &&
+    const waterThreshold = 0.82 - clamp(Number(this.options.waterAmount) / 100, 0, 2) * 0.16;
+    const water = Boolean(this.options.waterEnabled) &&
+      !this.isTrail(gx, gz) &&
       distanceFromOrigin > WORLD.originClearRadius + 4 &&
       northDistance > 28 &&
-      moisture > 0.66 &&
+      moisture > waterThreshold &&
       basin > 0.58 &&
       level <= 3;
 
@@ -229,8 +238,8 @@ export class Terrain {
     }
 
     const palette = this.profile.palette[family];
-    const region = valueNoise2D(cell.gx, cell.gz, 9, WORLD.seed + 503);
-    const detail = hash2D(cell.gx, cell.gz, WORLD.seed + layer * 43 + 509);
+    const region = valueNoise2D(cell.gx, cell.gz, 9, this.seed(503));
+    const detail = hash2D(cell.gx, cell.gz, this.seed(layer * 43 + 509));
     const index = Math.min(palette.length - 1, Math.floor(region * palette.length));
     const variation = 0.94 + detail * 0.12;
 
@@ -261,6 +270,10 @@ export class Terrain {
 
   isWaterGrid(gx, gz) {
     return this.getCell(gx, gz).water;
+  }
+
+  seed(offset) {
+    return WORLD.seed + Math.floor(Number(this.options.seedOffset) || 0) + offset;
   }
 
   isWaterWorld(x, z) {

@@ -1,6 +1,23 @@
+const OPTIONS_KEY = 'voxel-survival-options-v1';
+
+const DEFAULT_KEYBINDS = Object.freeze({
+  moveForward: 'KeyW',
+  moveBackward: 'KeyS',
+  moveLeft: 'KeyA',
+  moveRight: 'KeyD',
+  interact: 'KeyE',
+  reload: 'KeyR',
+  build: 'KeyB',
+  craftPotion: 'KeyC',
+  usePotion: 'Digit1',
+  mute: 'KeyM',
+  chat: 'Enter'
+});
+
 export class InputManager {
   constructor(target = window) {
     this.target = target;
+    this.keybinds = loadKeybinds();
     this.keys = new Set();
     this.zoomDelta = 0;
     this.chunkDebugToggle = false;
@@ -29,12 +46,17 @@ export class InputManager {
   }
 
   getMovement() {
-    const x = Number(this.keys.has('KeyD') || this.keys.has('ArrowRight')) -
-      Number(this.keys.has('KeyA') || this.keys.has('ArrowLeft'));
-    const y = Number(this.keys.has('KeyW') || this.keys.has('ArrowUp')) -
-      Number(this.keys.has('KeyS') || this.keys.has('ArrowDown'));
+    const x = Number(this.keys.has(this.keybinds.moveRight) || this.keys.has('ArrowRight')) -
+      Number(this.keys.has(this.keybinds.moveLeft) || this.keys.has('ArrowLeft'));
+    const y = Number(this.keys.has(this.keybinds.moveForward) || this.keys.has('ArrowUp')) -
+      Number(this.keys.has(this.keybinds.moveBackward) || this.keys.has('ArrowDown'));
 
     return { x, y };
+  }
+
+  reloadSettings() {
+    this.keybinds = loadKeybinds();
+    this.keys.clear();
   }
 
   consumeZoomDelta() {
@@ -50,7 +72,7 @@ export class InputManager {
   }
 
   isInteractHeld() {
-    return this.keys.has('KeyE');
+    return this.keys.has(this.keybinds.interact);
   }
 
   consumeReload() {
@@ -92,6 +114,10 @@ export class InputManager {
   }
 
   handleKeyDown(event) {
+    if (isTypingTarget(event.target)) {
+      return;
+    }
+
     this.keys.add(event.code);
 
     if (event.code === 'F2' && !event.repeat) {
@@ -103,22 +129,26 @@ export class InputManager {
       return;
     }
 
-    if (event.code === 'KeyR') {
+    if (event.code === this.keybinds.reload) {
       this.reloadRequested = true;
-    } else if (event.code === 'KeyB') {
+    } else if (event.code === this.keybinds.build) {
       this.buildToggleRequested = true;
-    } else if (event.code === 'KeyC') {
+    } else if (event.code === this.keybinds.craftPotion) {
       this.craftPotionRequested = true;
-    } else if (event.code === 'Digit1') {
+    } else if (event.code === this.keybinds.usePotion) {
       this.usePotionRequested = true;
     } else if (event.code === 'Escape') {
       this.cancelRequested = true;
-    } else if (event.code === 'KeyM') {
+    } else if (event.code === this.keybinds.mute) {
       this.muteToggleRequested = true;
     }
   }
 
   handleKeyUp(event) {
+    if (isTypingTarget(event.target)) {
+      return;
+    }
+
     this.keys.delete(event.code);
   }
 
@@ -155,4 +185,18 @@ export class InputManager {
     this.target.removeEventListener('pointerdown', this.handlePointerDown);
     this.target.removeEventListener('pointerleave', this.handlePointerLeave);
   }
+}
+
+function loadKeybinds() {
+  try {
+    const options = JSON.parse(window.localStorage.getItem(OPTIONS_KEY) ?? '{}');
+    return { ...DEFAULT_KEYBINDS, ...options.keybinds };
+  } catch {
+    return { ...DEFAULT_KEYBINDS };
+  }
+}
+
+function isTypingTarget(target) {
+  const tagName = target?.tagName;
+  return target?.isContentEditable || tagName === 'INPUT' || tagName === 'TEXTAREA' || tagName === 'SELECT';
 }

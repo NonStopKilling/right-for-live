@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { DEFAULT_LAB_OPTIONS } from '../config/gameOptions.js';
 import { WORLD, hash2D } from '../utils/constants.js';
 
 const MATRIX = new THREE.Matrix4();
@@ -11,6 +12,7 @@ export class WaterSystem {
   constructor(terrain, profile) {
     this.terrain = terrain;
     this.profile = profile;
+    this.options = structuredClone(DEFAULT_LAB_OPTIONS);
     this.geometry = new THREE.BoxGeometry(1, 1, 1);
     this.material = new THREE.MeshStandardMaterial({
       color: 0xffffff,
@@ -23,8 +25,13 @@ export class WaterSystem {
     });
   }
 
+  applyOptions(options = {}) {
+    this.options = { ...this.options, ...options };
+    this.material.opacity = Math.max(0.08, Math.min(0.86, Number(this.options.waterOpacity) / 100));
+  }
+
   createChunkGroup(cells, chunkKey) {
-    const blocks = cells.filter((cell) => cell.water);
+    const blocks = this.options.waterEnabled ? cells.filter((cell) => cell.water) : [];
     const group = new THREE.Group();
     group.name = `WaterChunk-${chunkKey}`;
 
@@ -40,7 +47,7 @@ export class WaterSystem {
 
     blocks.forEach((cell, index) => {
       const { x, z } = this.terrain.gridToWorld(cell.gx, cell.gz);
-      const ripple = 0.92 + hash2D(cell.gx, cell.gz, WORLD.seed + 1889) * 0.12;
+      const ripple = 0.92 + hash2D(cell.gx, cell.gz, this.seed(1889)) * 0.12;
       POSITION.set(x, cell.level * WORLD.blockHeight + 0.038, z);
       SCALE.set(WORLD.cellSize * 0.94, 0.036, WORLD.cellSize * 0.94);
       MATRIX.compose(POSITION, QUATERNION, SCALE);
@@ -61,6 +68,10 @@ export class WaterSystem {
     }
 
     return cell.moisture > 0.78 ? 0x3d9f9a : 0x317f83;
+  }
+
+  seed(offset) {
+    return WORLD.seed + Math.floor(Number(this.options.seedOffset) || 0) + offset;
   }
 
   dispose() {

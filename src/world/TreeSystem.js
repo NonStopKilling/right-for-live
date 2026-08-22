@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { DEFAULT_LAB_OPTIONS } from '../config/gameOptions.js';
 import { WORLD, hash2D, valueNoise2D } from '../utils/constants.js';
 
 const MATRIX = new THREE.Matrix4();
@@ -78,6 +79,7 @@ export class TreeSystem {
   constructor(terrain, profile) {
     this.terrain = terrain;
     this.profile = profile;
+    this.options = structuredClone(DEFAULT_LAB_OPTIONS);
     this.geometry = new THREE.BoxGeometry(1, 1, 1);
     this.materials = {
       trunk: new THREE.MeshStandardMaterial({
@@ -97,6 +99,10 @@ export class TreeSystem {
         toneMapped: false
       })
     };
+  }
+
+  applyOptions(options = {}) {
+    this.options = { ...this.options, ...options };
   }
 
   createChunkGroup(cells, chunkKey, depletedResources = new Set()) {
@@ -168,13 +174,15 @@ export class TreeSystem {
       return false;
     }
 
-    const density = hash2D(cell.gx, cell.gz, WORLD.seed + 701);
+    const density = hash2D(cell.gx, cell.gz, this.seed(701));
     const distanceFromOrigin = Math.hypot(cell.gx, cell.gz);
     const clearingRingBias = distanceFromOrigin < 24 ? 0.12 : 0;
     const surfaceThreshold = cell.surface === 'moss' ? 0.42 : cell.surface === 'soil' ? 0.5 : 0.49;
-    const forestThreshold = surfaceThreshold - clearingRingBias;
+    const densityScale = Math.max(0, Number(this.options.forestDensity) / 100);
+    const forestThreshold = surfaceThreshold - clearingRingBias + (1 - densityScale) * 0.22;
+    const densityThreshold = 0.58 + (1 - densityScale) * 0.2;
 
-    if (cell.forest < forestThreshold || density < 0.58) {
+    if (densityScale <= 0 || cell.forest < forestThreshold || density < densityThreshold) {
       return false;
     }
 
@@ -184,7 +192,7 @@ export class TreeSystem {
           continue;
         }
 
-        if (hash2D(cell.gx + offsetX, cell.gz + offsetZ, WORLD.seed + 701) > density) {
+        if (hash2D(cell.gx + offsetX, cell.gz + offsetZ, this.seed(701)) > density) {
           return false;
         }
       }
@@ -202,7 +210,7 @@ export class TreeSystem {
       return false;
     }
 
-    return hash2D(cell.gx, cell.gz, WORLD.seed + 773) > 0.965;
+    return hash2D(cell.gx, cell.gz, this.seed(773)) > 0.965;
   }
 
   hasNearbyTrail(gx, gz) {
@@ -216,11 +224,11 @@ export class TreeSystem {
   }
 
   addTreeRecipe(cell, trunks, foliage, caps) {
-    const variety = hash2D(cell.gx, cell.gz, WORLD.seed + 811);
+    const variety = hash2D(cell.gx, cell.gz, this.seed(811));
     const variantName = this.resolveVariant(variety, cell.forest);
     const variant = TREE_VARIANTS[variantName];
-    const heightScale = 0.88 + hash2D(cell.gx, cell.gz, WORLD.seed + 823) * 0.5;
-    const widthScale = 0.86 + hash2D(cell.gz, cell.gx, WORLD.seed + 829) * 0.3;
+    const heightScale = 0.88 + hash2D(cell.gx, cell.gz, this.seed(823)) * 0.5;
+    const widthScale = 0.86 + hash2D(cell.gz, cell.gx, this.seed(829)) * 0.3;
     const rotation = Math.floor(variety * 8) * (Math.PI / 4);
     const baseY = cell.level * WORLD.blockHeight;
     const { x, z } = this.terrain.gridToWorld(cell.gx, cell.gz);
@@ -273,7 +281,7 @@ export class TreeSystem {
   }
 
   addBushRecipe(cell, foliage, caps) {
-    const noise = hash2D(cell.gx, cell.gz, WORLD.seed + 887);
+    const noise = hash2D(cell.gx, cell.gz, this.seed(887));
     const blocks = noise > 0.68 ? 3 : noise > 0.34 ? 2 : 1;
     const palette = this.resolveTreePalette(cell.gx, cell.gz);
     const baseY = cell.level * WORLD.blockHeight;
@@ -306,6 +314,16 @@ export class TreeSystem {
   }
 
   resolveVariant(variety, forest) {
+    const shapeVariety = Math.max(0, Number(this.options.treeShapeVariety) / 100);
+
+    if (shapeVariety <= 0.2) {
+      return forest > 0.64 ? 'spire' : 'needle';
+    }
+
+    if (shapeVariety <= 0.55 && variety > 0.35) {
+      return variety > 0.72 ? 'broad' : 'spire';
+    }
+
     if (variety > 0.88) {
       return 'fan';
     }
@@ -335,15 +353,21 @@ export class TreeSystem {
   }
 
   resolveTreePalette(gx, gz) {
-    const region = valueNoise2D(gx, gz, 15, WORLD.seed + 907);
-    const index = Math.min(this.profile.treePalettes.length - 1, Math.floor(region * this.profile.treePalettes.length));
+    const region = valueNoise2D(gx, gz, 15, this.seed(907));
+    const variety = Math.max(0, Math.min(1, Number(this.options.treeColorVariety) / 100));
+    const paletteCount = Math.max(1, Math.ceil(this.profile.treePalettes.length * variety));
+    const index = Math.min(paletteCount - 1, Math.floor(region * paletteCount));
     return this.profile.treePalettes[index];
   }
 
   resolveFamilyColor(family, gx, gz, seedOffset) {
     const palette = this.profile.palette[family];
-    const noise = hash2D(gx, gz, WORLD.seed + seedOffset);
+    const noise = hash2D(gx, gz, this.seed(seedOffset));
     return palette[Math.min(palette.length - 1, Math.floor(noise * palette.length))];
+  }
+
+  seed(offset) {
+    return WORLD.seed + Math.floor(Number(this.options.seedOffset) || 0) + offset;
   }
 
   createMesh(name, blocks, material, castsShadow) {

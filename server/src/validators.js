@@ -9,6 +9,7 @@ export function validateProfile(input) {
   const gender = String(input?.gender ?? '').trim().toLowerCase();
   const fullName = String(input?.fullName ?? input?.full_name ?? '').trim();
   const characterName = String(input?.characterName ?? input?.character_name ?? '').trim();
+  const callsign = String(input?.callsign ?? '').trim();
 
   if (!EMAIL_RE.test(email)) {
     throw httpError(400, 'Invalid email');
@@ -30,7 +31,7 @@ export function validateProfile(input) {
     throw httpError(400, 'Invalid character name');
   }
 
-  return { email, birthDate, gender, fullName, characterName };
+  return { email, birthDate, gender, fullName, characterName, callsign: callsign.slice(0, 40) };
 }
 
 export function validateSavePayload(payload) {
@@ -39,7 +40,7 @@ export function validateSavePayload(payload) {
   }
 
   const inventory = payload.inventory ?? {};
-  const allowedInventory = ['wood', 'stone', 'artifact', 'ammoReserve'];
+  const allowedInventory = ['wood', 'stone', 'artifact', 'ammoReserve', 'healingPotion', 'experience'];
   const sanitizedInventory = Object.fromEntries(
     allowedInventory.map((key) => [key, sanitizeCount(inventory[key])])
   );

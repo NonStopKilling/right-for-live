@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { loadGameOptions } from '../config/gameOptions.js';
 import { WORLD } from '../utils/constants.js';
 import { LandmarkSystem } from './LandmarkSystem.js';
 import { PropSystem } from './PropSystem.js';
@@ -29,6 +30,8 @@ export class World {
     this.props = new PropSystem(this.terrain, profile);
     this.water = new WaterSystem(this.terrain, profile);
     this.landmark = new LandmarkSystem(this.terrain, profile);
+    this.options = loadGameOptions().lab;
+    this.applyOptions(this.options, { rebuild: false });
 
     this.group.add(this.landmark.group);
     this.refreshChunks(0, 0);
@@ -95,7 +98,9 @@ export class World {
   }
 
   update(deltaTime, playerPosition) {
-    this.landmark.update(deltaTime);
+    if (this.options.landmarkMotion) {
+      this.landmark.update(deltaTime);
+    }
 
     if (!playerPosition) {
       return;
@@ -205,13 +210,43 @@ export class World {
   }
 
   toggleChunkDebug() {
-    this.chunkDebugVisible = !this.chunkDebugVisible;
+    this.setChunkDebugVisible(!this.chunkDebugVisible);
+  }
+
+  setChunkDebugVisible(visible) {
+    this.chunkDebugVisible = Boolean(visible);
 
     this.group.traverse((object) => {
       if (object.name === 'ChunkDebugBorder') {
         object.visible = this.chunkDebugVisible;
       }
     });
+  }
+
+  applyOptions(options = {}, { rebuild = true } = {}) {
+    this.options = { ...this.options, ...options };
+    this.terrain.applyOptions(this.options);
+    this.trees.applyOptions(this.options);
+    this.water.applyOptions(this.options);
+    this.setChunkDebugVisible(this.options.chunkDebug);
+
+    if (rebuild && this.options.liveRebuild) {
+      this.rebuildChunks();
+    }
+  }
+
+  rebuildChunks() {
+    const centerX = Number.isFinite(this.activeChunkX) ? this.activeChunkX : 0;
+    const centerZ = Number.isFinite(this.activeChunkZ) ? this.activeChunkZ : 0;
+
+    for (const chunk of this.chunks.values()) {
+      this.releaseChunk(chunk);
+    }
+
+    this.chunks.clear();
+    this.activeChunkX = Number.NaN;
+    this.activeChunkZ = Number.NaN;
+    this.refreshChunks(centerX, centerZ);
   }
 
   releaseChunk(chunk) {

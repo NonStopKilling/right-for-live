@@ -9,7 +9,9 @@ export class JsonStore {
     this.data = {
       profiles: [],
       saves: {},
-      gravestones: []
+      gravestones: [],
+      quests: {},
+      economy: {}
     };
     this.load();
   }
@@ -19,7 +21,14 @@ export class JsonStore {
       return;
     }
 
-    this.data = JSON.parse(fs.readFileSync(this.filePath, 'utf8'));
+    this.data = {
+      profiles: [],
+      saves: {},
+      gravestones: [],
+      quests: {},
+      economy: {},
+      ...JSON.parse(fs.readFileSync(this.filePath, 'utf8'))
+    };
   }
 
   persist() {
@@ -75,6 +84,36 @@ export class JsonStore {
     this.data.saves[profileId] = save;
     this.persist();
     return save;
+  }
+
+  getQuestStates(profileId) {
+    if (!this.getProfile(profileId)) {
+      throw httpError(404, 'Profile not found');
+    }
+
+    this.data.quests[profileId] ??= {};
+    return structuredClone(this.data.quests[profileId]);
+  }
+
+  putQuestStates(profileId, states) {
+    if (!this.getProfile(profileId)) {
+      throw httpError(404, 'Profile not found');
+    }
+
+    this.data.quests[profileId] = structuredClone(states);
+    this.persist();
+    return this.getQuestStates(profileId);
+  }
+
+  getEconomyState() {
+    this.data.economy ??= {};
+    return structuredClone(this.data.economy);
+  }
+
+  putEconomyState(state) {
+    this.data.economy = structuredClone(state);
+    this.persist();
+    return this.getEconomyState();
   }
 
   listGravestones(sessionId) {

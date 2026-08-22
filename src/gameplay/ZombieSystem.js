@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { DEFAULT_LAB_OPTIONS } from '../config/gameOptions.js';
 import { GAMEPLAY } from '../config/gameplay.js';
 import { Zombie } from '../entities/Zombie.js';
 import { WORLD, hash2D } from '../utils/constants.js';
@@ -14,6 +15,7 @@ export class ZombieSystem {
     this.eventBus = eventBus;
     this.audio = audio;
     this.profile = profile;
+    this.options = structuredClone(DEFAULT_LAB_OPTIONS);
     this.group = new THREE.Group();
     this.group.name = 'Zombies';
     this.zombies = [];
@@ -36,6 +38,27 @@ export class ZombieSystem {
     this.towerSystem = towerSystem;
   }
 
+  applyOptions(options = {}) {
+    const previousFear = this.options.zombieFearVisuals;
+    this.options = { ...this.options, ...options };
+
+    if (!this.options.localZombies) {
+      while (this.zombies.length > 0) {
+        this.removeZombieAt(this.zombies.length - 1);
+      }
+    }
+
+    if (previousFear !== this.options.zombieFearVisuals) {
+      this.assetsByTier.forEach((assets) => {
+        assets.bodyMaterial.dispose();
+        assets.headMaterial.dispose();
+        assets.eyeMaterial.dispose();
+        assets.boneMaterial.dispose();
+      });
+      this.assetsByTier.clear();
+    }
+  }
+
   update(deltaTime, paused = false) {
     this.updateLootEffects(deltaTime);
 
@@ -43,10 +66,14 @@ export class ZombieSystem {
       return;
     }
 
+    if (!this.options.localZombies) {
+      return;
+    }
+
     this.spawnTimer -= deltaTime;
 
     if (this.spawnTimer <= 0) {
-      this.spawnTimer = GAMEPLAY.zombie.spawnInterval;
+      this.spawnTimer = GAMEPLAY.zombie.spawnInterval / Math.max(0.1, Number(this.options.zombieSpawnRate) / 100);
       this.trySpawn();
     }
 
@@ -72,7 +99,9 @@ export class ZombieSystem {
   }
 
   trySpawn() {
-    if (this.zombies.length >= GAMEPLAY.zombie.maxActive || this.player.isDead) {
+    const maxActive = Math.max(0, Math.round(GAMEPLAY.zombie.maxActive * Number(this.options.zombieMaxActive) / 100));
+
+    if (this.zombies.length >= maxActive || this.player.isDead) {
       return false;
     }
 
@@ -100,11 +129,13 @@ export class ZombieSystem {
   }
 
   createStats(tier) {
+    const power = Math.max(0.25, Number(this.options.zombiePower) / 100);
+
     return {
       tier,
-      maxHealth: Math.round(GAMEPLAY.zombie.baseHealth * (1 + tier * 0.25)),
-      damage: Math.round(GAMEPLAY.zombie.baseDamage * (1 + tier * 0.15)),
-      speed: GAMEPLAY.zombie.baseSpeed * (1 + Math.min(0.55, tier * 0.06)),
+      maxHealth: Math.round(GAMEPLAY.zombie.baseHealth * (1 + tier * 0.25) * power),
+      damage: Math.round(GAMEPLAY.zombie.baseDamage * (1 + tier * 0.15) * power),
+      speed: GAMEPLAY.zombie.baseSpeed * (1 + Math.min(0.55, tier * 0.06)) * Math.max(0.45, power),
       attackInterval: GAMEPLAY.zombie.attackInterval
     };
   }
@@ -252,6 +283,14 @@ export class ZombieSystem {
       loot.artifact = 1;
     }
 
+    const multiplier = Math.max(0, Number(this.options.lootMultiplier) / 100);
+    Object.keys(loot).forEach((resource) => {
+      loot[resource] = Math.max(0, Math.round(loot[resource] * multiplier));
+      if (loot[resource] <= 0) {
+        delete loot[resource];
+      }
+    });
+
     return loot;
   }
 
@@ -312,7 +351,8 @@ export class ZombieSystem {
       return this.assetsByTier.get(visualTier);
     }
 
-    const base = COLOR.setHSL(0.29 - visualTier * 0.026, 0.34 + visualTier * 0.06, 0.34 - visualTier * 0.018).getHex();
+    const fear = Math.max(0, Math.min(1.6, Number(this.options.zombieFearVisuals) / 100));
+    const base = COLOR.setHSL(0.29 - visualTier * 0.026 - fear * 0.035, 0.34 + visualTier * 0.06 + fear * 0.18, 0.34 - visualTier * 0.018 - fear * 0.08).getHex();
     const head = COLOR.setHex(base).offsetHSL(0.02, 0.04, 0.08).getHex();
     const eye = COLOR.setHSL(0.04 - visualTier * 0.008, 1, 0.58 + visualTier * 0.035).getHex();
     const assets = {
@@ -328,7 +368,7 @@ export class ZombieSystem {
         roughness: 0.88,
         flatShading: true
       }),
-      eyeMaterial: new THREE.MeshBasicMaterial({ color: eye, toneMapped: false }),
+      eyeMaterial: new THREE.MeshBasicMaterial({ color: fear > 1.05 ? 0xff2e1d : eye, toneMapped: false }),
       boneMaterial: new THREE.MeshStandardMaterial({
         color: visualTier >= 4 ? 0x4d1f22 : 0xd8d2a4,
         roughness: 0.82,

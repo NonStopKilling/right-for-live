@@ -514,6 +514,659 @@ button {
   max-width: 420px;
 }
 
+.hide-tower-panel .hud-tower-list,
+.hide-objective-panel .hud-objective {
+  display: none;
+}
+
+[data-hud-contrast="high"] .hud-frame,
+[data-hud-contrast="high"] .overlay-command,
+[data-hud-contrast="high"] .overlay-chat {
+  border-color: rgba(241, 230, 154, 0.92);
+  background: rgba(8, 8, 6, 0.96);
+}
+
+.game-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 8;
+  color: #f1edbd;
+  font-family: "Lucida Console", "Courier New", monospace;
+  pointer-events: none;
+  text-shadow: 0 2px 0 #090707;
+}
+
+.overlay-launcher {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  display: grid;
+  grid-template-columns: repeat(2, 9px);
+  gap: 4px;
+  width: 42px;
+  height: 42px;
+  place-content: center;
+  padding: 0;
+  cursor: pointer;
+  pointer-events: auto;
+}
+
+.overlay-launcher span {
+  display: block;
+  width: 9px;
+  height: 9px;
+  background: #e4d870;
+  box-shadow: 1px 1px 0 #5a532d;
+}
+
+.overlay-command {
+  position: absolute;
+  top: 64px;
+  right: 14px;
+  display: grid;
+  width: min(440px, calc(100vw - 28px));
+  max-height: min(620px, calc(100vh - 82px));
+  overflow: hidden;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(-8px);
+  transition: opacity 120ms linear, transform 120ms linear;
+}
+
+.game-overlay.is-command-open .overlay-command {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateY(0);
+}
+
+.overlay-command__header,
+.overlay-chat__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px;
+  border-bottom: 1px solid rgba(221, 210, 126, 0.2);
+  background: rgba(29, 27, 18, 0.78);
+}
+
+.overlay-command__header b {
+  display: block;
+  margin-top: 3px;
+  color: #f1e69a;
+  font-size: 14px;
+}
+
+.overlay-command__header button,
+.overlay-chat__header > button,
+.overlay-secondary,
+.overlay-register button,
+.overlay-chat__form button {
+  min-height: 30px;
+  border: 1px solid #777047;
+  border-radius: 2px;
+  background: #242218;
+  color: #e4d870;
+  cursor: pointer;
+  font-size: 9px;
+  font-weight: 700;
+  text-shadow: none;
+}
+
+.overlay-tabs {
+  display: flex;
+  gap: 4px;
+  padding: 8px;
+  overflow-x: auto;
+  border-bottom: 1px solid rgba(221, 210, 126, 0.16);
+}
+
+.overlay-tabs button {
+  min-height: 28px;
+  border: 1px solid rgba(119, 112, 71, 0.82);
+  border-radius: 2px;
+  background: rgba(27, 26, 18, 0.9);
+  color: #aaa982;
+  cursor: pointer;
+  font-size: 8px;
+  font-weight: 700;
+  text-shadow: none;
+  white-space: nowrap;
+}
+
+.overlay-tabs button.is-active {
+  border-color: #e4d870;
+  background: #3a3420;
+  color: #f1e69a;
+}
+
+.overlay-command__body {
+  min-height: 330px;
+  overflow: auto;
+}
+
+.overlay-panel {
+  display: none;
+  gap: 10px;
+  padding: 12px;
+}
+
+.overlay-panel.is-active {
+  display: grid;
+}
+
+.overlay-panel--lab {
+  gap: 9px;
+}
+
+.overlay-panel label {
+  display: grid;
+  gap: 6px;
+  color: #d1d0ae;
+  font-size: 9px;
+}
+
+.overlay-panel input,
+.overlay-panel select,
+.overlay-chat__form input {
+  min-height: 32px;
+  border: 1px solid rgba(119, 112, 71, 0.86);
+  border-radius: 2px;
+  background: #12110d;
+  color: #f1edbd;
+  font: inherit;
+  font-size: 10px;
+  outline: none;
+}
+
+.overlay-panel input:focus,
+.overlay-panel select:focus,
+.overlay-chat__form input:focus {
+  border-color: #e4d870;
+  box-shadow: 0 0 0 1px rgba(228, 216, 112, 0.28);
+}
+
+.overlay-toggle {
+  grid-template-columns: 18px minmax(0, 1fr);
+  align-items: center;
+}
+
+.overlay-toggle input {
+  min-height: auto;
+}
+
+.overlay-keybinds,
+.overlay-attributes,
+.overlay-quests {
+  display: grid;
+  gap: 6px;
+}
+
+.overlay-market {
+  display: grid;
+  gap: 7px;
+}
+
+.overlay-quests-status {
+  padding: 7px 8px;
+  border: 1px solid rgba(121, 198, 167, 0.22);
+  background: rgba(10, 16, 14, 0.72);
+  color: #8fd5b9;
+  font-size: 8px;
+  font-weight: 800;
+  letter-spacing: 0;
+}
+
+.overlay-quest {
+  display: grid;
+  gap: 8px;
+  padding: 10px;
+  border-left: 2px solid rgba(121, 198, 167, 0.42);
+  background: rgba(34, 31, 22, 0.78);
+}
+
+.overlay-quest.is-active {
+  border-left-color: #e4d870;
+}
+
+.overlay-quest.is-completed {
+  border-left-color: #79c6a7;
+  background: rgba(19, 34, 29, 0.78);
+}
+
+.overlay-quest span,
+.overlay-quest small {
+  color: #aaa982;
+  font-size: 8px;
+  font-weight: 700;
+}
+
+.overlay-quest b {
+  display: block;
+  margin-top: 3px;
+  color: #f1e69a;
+  font-size: 11px;
+}
+
+.overlay-quest p {
+  margin: 5px 0 0;
+  color: #d1d0ae;
+  font-size: 9px;
+  line-height: 1.45;
+}
+
+.overlay-quest__step {
+  display: grid;
+  gap: 5px;
+}
+
+.overlay-quest__hint {
+  margin: 2px 0 0;
+  padding: 7px;
+  border-left: 2px solid rgba(121, 198, 167, 0.55);
+  background: rgba(8, 17, 15, 0.58);
+  color: #b9d9c7;
+  font-size: 8px;
+  line-height: 1.45;
+}
+
+.overlay-quest__step meter {
+  width: 100%;
+  height: 8px;
+  accent-color: #e4d870;
+}
+
+.overlay-quest em {
+  color: #8fd5b9;
+  font-size: 8px;
+  font-style: normal;
+  font-weight: 800;
+}
+
+.overlay-quest button {
+  justify-self: start;
+  min-height: 28px;
+  border: 1px solid #777047;
+  border-radius: 2px;
+  background: #242218;
+  color: #e4d870;
+  cursor: pointer;
+  font-size: 8px;
+  font-weight: 800;
+}
+
+.overlay-quest--empty {
+  color: #aaa982;
+  font-size: 9px;
+}
+
+.overlay-market__merchant {
+  display: grid;
+  gap: 2px;
+  padding: 8px 9px;
+  border: 1px solid rgba(121, 198, 167, 0.18);
+  background: rgba(9, 15, 13, 0.78);
+}
+
+.overlay-market__merchant b {
+  color: #f1e69a;
+  font-size: 11px;
+}
+
+.overlay-market__merchant span {
+  color: #8fd5b9;
+  font-size: 8px;
+  font-weight: 800;
+}
+
+.overlay-market-offer {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+  padding: 9px;
+  border-left: 2px solid rgba(228, 216, 112, 0.38);
+  background: rgba(34, 31, 22, 0.78);
+}
+
+.overlay-market-offer span,
+.overlay-market-offer small,
+.overlay-market-offer em {
+  display: block;
+  color: #aaa982;
+  font-size: 8px;
+  font-style: normal;
+  font-weight: 700;
+}
+
+.overlay-market-offer b {
+  display: block;
+  margin: 3px 0 5px;
+  color: #f1e69a;
+  font-size: 10px;
+}
+
+.overlay-market-offer > div:last-child {
+  display: grid;
+  justify-items: end;
+  gap: 6px;
+}
+
+.overlay-market-offer button {
+  min-height: 28px;
+  border: 1px solid #777047;
+  border-radius: 2px;
+  background: #242218;
+  color: #e4d870;
+  cursor: pointer;
+  font-size: 8px;
+  font-weight: 800;
+}
+
+.overlay-market-offer button:disabled {
+  cursor: not-allowed;
+  opacity: 0.38;
+}
+
+.overlay-keybind,
+.overlay-attribute,
+.overlay-metric {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+  min-height: 34px;
+  padding: 6px 8px;
+  border-left: 2px solid rgba(121, 198, 167, 0.25);
+  background: rgba(34, 31, 22, 0.72);
+}
+
+.overlay-keybind span,
+.overlay-attribute span,
+.overlay-metric span {
+  color: #d1d0ae;
+  font-size: 9px;
+}
+
+.overlay-keybind button,
+.overlay-attribute button {
+  min-width: 54px;
+  min-height: 24px;
+  border: 1px solid rgba(119, 112, 71, 0.86);
+  border-radius: 2px;
+  background: #1d1b12;
+  color: #e4d870;
+  cursor: pointer;
+  font-size: 8px;
+  font-weight: 700;
+}
+
+.overlay-attribute {
+  grid-template-columns: minmax(0, 1fr) 28px 28px 28px;
+}
+
+.overlay-attribute b,
+.overlay-metric b {
+  color: #f1e69a;
+  font-size: 10px;
+  text-align: center;
+}
+
+.overlay-attribute button:disabled {
+  cursor: not-allowed;
+  opacity: 0.35;
+}
+
+.overlay-meter {
+  height: 7px;
+  background: #211d14;
+  box-shadow: inset 0 0 0 1px #090706;
+}
+
+.overlay-meter i {
+  display: block;
+  width: 8%;
+  height: 100%;
+  background: #77c7a2;
+  transition: width 140ms steps(5, end);
+}
+
+.overlay-lab-toolbar {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+  padding: 8px;
+  border: 1px solid rgba(121, 198, 167, 0.2);
+  background: rgba(7, 14, 13, 0.78);
+}
+
+.overlay-lab-toolbar b {
+  color: #8fd5b9;
+  font-size: 9px;
+}
+
+.overlay-lab-group {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 10px;
+  border: 1px solid rgba(119, 112, 71, 0.48);
+  background: rgba(18, 17, 13, 0.58);
+}
+
+.overlay-lab-group legend {
+  padding: 0 5px;
+  color: #f1e69a;
+  font-size: 8px;
+  font-weight: 800;
+}
+
+.overlay-lab-control {
+  grid-template-columns: minmax(86px, 0.9fr) minmax(110px, 1.4fr) 45px;
+  align-items: center;
+}
+
+.overlay-lab-control input[type="range"] {
+  min-height: 20px;
+  accent-color: #79c6a7;
+}
+
+.overlay-lab-control output {
+  color: #8fd5b9;
+  font-size: 8px;
+  font-weight: 800;
+  text-align: right;
+}
+
+.overlay-lab-switches {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 7px;
+}
+
+.overlay-lab-switches .overlay-toggle {
+  min-height: 30px;
+  padding: 6px 8px;
+  border-left: 2px solid rgba(121, 198, 167, 0.32);
+  background: rgba(34, 31, 22, 0.72);
+  font-size: 8px;
+}
+
+.overlay-register {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.overlay-register label:first-child,
+.overlay-register button {
+  grid-column: 1 / -1;
+}
+
+.overlay-chat {
+  position: absolute;
+  bottom: 86px;
+  left: 14px;
+  display: grid;
+  width: min(460px, calc(100vw - 28px));
+  max-height: 322px;
+  overflow: hidden;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(10px);
+  transition: opacity 120ms linear, transform 120ms linear;
+}
+
+.game-overlay.is-chat-open .overlay-chat {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateY(0);
+}
+
+.overlay-chat::before {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: rgba(14, 13, 9, var(--chat-opacity, 0.88));
+  content: "";
+}
+
+.overlay-chat__header {
+  padding: 7px;
+}
+
+.overlay-chat__header .overlay-tabs {
+  flex: 1;
+  padding: 0;
+  border-bottom: 0;
+}
+
+.overlay-chat__messages {
+  display: grid;
+  align-content: end;
+  gap: 6px;
+  height: 210px;
+  overflow: auto;
+  padding: 10px;
+}
+
+.overlay-chat-message {
+  display: grid;
+  grid-template-columns: 42px 82px minmax(0, 1fr);
+  gap: 7px;
+  align-items: start;
+  color: #d1d0ae;
+  font-size: 9px;
+  line-height: 1.35;
+}
+
+.overlay-chat-message span {
+  color: #777f6e;
+}
+
+.overlay-chat-message b {
+  overflow: hidden;
+  color: #79c6a7;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.overlay-chat-message p {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.overlay-chat__form {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 74px;
+  gap: 8px;
+  padding: 8px;
+  border-top: 1px solid rgba(221, 210, 126, 0.16);
+}
+
+@media (min-width: 1280px) {
+  :root:not([data-hud-scale="compact"]) .hud-status {
+    width: 274px;
+    min-height: 110px;
+    padding: 13px;
+  }
+
+  :root:not([data-hud-scale="compact"]) .hud-checkpoint {
+    right: 70px;
+    width: 276px;
+    min-height: 94px;
+    padding: 13px;
+  }
+
+  :root:not([data-hud-scale="compact"]) .hud-resources {
+    grid-template-columns: repeat(5, 74px);
+    min-height: 68px;
+    padding: 10px;
+  }
+
+  :root:not([data-hud-scale="compact"]) .hud-resource b {
+    font-size: 16px;
+  }
+
+  :root:not([data-hud-scale="compact"]) .hud-resource small,
+  :root:not([data-hud-scale="compact"]) .hud-context small,
+  :root:not([data-hud-scale="compact"]) .hud-objective small {
+    font-size: 10px;
+  }
+
+  :root:not([data-hud-scale="compact"]) .hud-kicker,
+  :root:not([data-hud-scale="compact"]) .hud-health-row,
+  :root:not([data-hud-scale="compact"]) .hud-weapon-row,
+  :root:not([data-hud-scale="compact"]) .hud-context b,
+  :root:not([data-hud-scale="compact"]) .hud-objective b {
+    font-size: 12px;
+  }
+
+  :root:not([data-hud-scale="compact"]) .hud-tower-list {
+    top: 126px;
+    width: 276px;
+  }
+
+  :root:not([data-hud-scale="compact"]) .hud-objective {
+    width: 340px;
+    min-height: 82px;
+  }
+
+  :root:not([data-hud-scale="compact"]) .hud-context {
+    width: min(470px, calc(100vw - 650px));
+    min-height: 66px;
+  }
+
+  :root:not([data-hud-scale="compact"]) .overlay-command {
+    width: 496px;
+  }
+
+  :root:not([data-hud-scale="compact"]) .overlay-chat {
+    width: 540px;
+    max-height: 360px;
+  }
+}
+
+@media (min-width: 1680px) {
+  :root:not([data-hud-scale="compact"]) .game-hud,
+  :root:not([data-hud-scale="compact"]) .game-overlay {
+    font-size: 1.12rem;
+  }
+
+  :root:not([data-hud-scale="compact"]) .overlay-command {
+    width: 540px;
+  }
+
+  :root:not([data-hud-scale="compact"]) .overlay-chat {
+    width: 600px;
+  }
+}
+
+:root[data-hud-scale="large"] .hud-checkpoint {
+  right: 70px;
+}
+
 .webgl-error {
   display: grid;
   min-height: 100%;
@@ -556,7 +1209,7 @@ button {
 
   .hud-checkpoint {
     top: 8px;
-    right: 8px;
+    right: 52px;
     width: 148px;
     min-height: 82px;
     padding: 8px;
@@ -642,6 +1295,47 @@ button {
   .hud-notification {
     top: 100px;
   }
+
+  .overlay-launcher {
+    top: 8px;
+    right: 8px;
+    width: 36px;
+    height: 36px;
+    grid-template-columns: repeat(2, 8px);
+  }
+
+  .overlay-launcher span {
+    width: 8px;
+    height: 8px;
+  }
+
+  .overlay-command {
+    top: 52px;
+    right: 8px;
+    width: calc(100vw - 16px);
+    max-height: calc(100vh - 116px);
+  }
+
+  .overlay-register {
+    grid-template-columns: 1fr;
+  }
+
+  .overlay-chat {
+    right: 8px;
+    bottom: 64px;
+    left: 8px;
+    width: auto;
+    max-height: 270px;
+  }
+
+  .overlay-chat__messages {
+    height: 154px;
+  }
+
+  .overlay-chat-message {
+    grid-template-columns: 38px 64px minmax(0, 1fr);
+    font-size: 8px;
+  }
 }
 
 @media (max-width: 380px) {
@@ -650,7 +1344,7 @@ button {
   }
 
   .hud-checkpoint {
-    width: 132px;
+    width: 122px;
   }
 
   .hud-health-row {

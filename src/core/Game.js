@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { AudioManager } from '../audio/AudioManager.js';
+import { loadGameOptions } from '../config/gameOptions.js';
 import { resolveVisualProfile } from '../config/visualProfiles.js';
 import { Player } from '../entities/Player.js';
 import { CombatSystem } from '../gameplay/CombatSystem.js';
@@ -13,7 +14,9 @@ import { StorySystem } from '../gameplay/StorySystem.js';
 import { TowerSystem } from '../gameplay/TowerSystem.js';
 import { ZombieSystem } from '../gameplay/ZombieSystem.js';
 import { InputManager } from '../input/InputManager.js';
+import { NetworkNpcSystem } from '../online/NetworkNpcSystem.js';
 import { GameHud } from '../ui/GameHud.js';
+import { GameOverlay } from '../ui/GameOverlay.js';
 import { RENDER } from '../utils/constants.js';
 import { World } from '../world/World.js';
 import { CameraController } from './Camera.js';
@@ -39,6 +42,7 @@ export class Game {
   constructor(root) {
     this.root = root;
     this.profile = resolveVisualProfile();
+    this.gameOptions = loadGameOptions();
     this.eventBus = new EventBus();
     this.saveSystem = new SaveSystem();
     const loadedSave = this.saveSystem.load();
@@ -77,6 +81,14 @@ export class Game {
       this.saveState.activeCheckpointId
     );
     this.zombies.setTowerSystem(this.towers);
+    this.serverNpcs = new NetworkNpcSystem(
+      this.world,
+      this.player,
+      this.eventBus,
+      this.audio,
+      this.profile,
+      this.inventory
+    );
     this.combat = new CombatSystem(
       this.cameraController.camera,
       this.player,
@@ -84,7 +96,8 @@ export class Game {
       this.inventory,
       this.eventBus,
       this.audio,
-      this.saveState.magazine
+      this.saveState.magazine,
+      this.serverNpcs
     );
     this.resources = new ResourceSystem(
       this.world,
@@ -122,8 +135,20 @@ export class Game {
       toggleSound: () => this.audio.toggle(),
       reopenStory: () => this.story.reopen(),
       dismissStory: () => this.story.dismiss(),
-      dismantleTower: (id) => this.towers.dismantleTower(id)
+      dismantleTower: (id) => this.towers.dismantleTower(id),
+      applyInputSettings: () => this.input.reloadSettings(),
+      setAudioVolume: (value) => this.audio.setVolume(value)
     });
+    this.overlay = new GameOverlay(this.root, this.eventBus, {
+      toggleSound: () => this.audio.toggle(),
+      applyInputSettings: () => this.input.reloadSettings(),
+      setAudioVolume: (value) => this.audio.setVolume(value),
+      startQuest: (questId) => this.serverNpcs.startQuest(questId),
+      trade: (merchantId, offerId) => this.serverNpcs.trade(merchantId, offerId),
+      registerProfile: (profile) => this.serverNpcs.registerProfile(profile),
+      applyGameOptions: (options) => this.applyGameOptions(options)
+    });
+    this.applyGameOptions(this.gameOptions, { rebuild: false });
     this.animationFrameId = 0;
     this.isRunning = false;
     this.saveUnsubscribers = SAVE_EVENTS.map((eventName) =>
@@ -137,6 +162,7 @@ export class Game {
     this.world.addTo(this.scene);
     this.towers.addTo(this.scene);
     this.zombies.addTo(this.scene);
+    this.serverNpcs.addTo(this.scene);
     this.combat.addTo(this.scene);
     this.player.addTo(this.scene);
     this.addLighting();
@@ -253,6 +279,7 @@ export class Game {
     this.combat.update(deltaTime, this.input, acceptsCombatInput, acceptsCombatInput);
     this.crafting.update(this.input, paused);
     this.zombies.update(deltaTime, paused);
+    this.serverNpcs.update(deltaTime);
     this.respawn.update(deltaTime);
     this.objectives.update();
     this.cameraController.update(deltaTime, this.player.position);
@@ -261,7 +288,7 @@ export class Game {
   }
 
   updateHud(deltaTime) {
-    this.hud.update(deltaTime, {
+    const hudState = {
       player: this.player.getHealthSnapshot(),
       weapon: this.combat.getSnapshot(),
       inventory: this.inventory.snapshot(),
@@ -271,9 +298,23 @@ export class Game {
       towers: this.towers.getListSnapshot(),
       story: this.story.getSnapshot(),
       objective: this.objectives.getSnapshot(),
+      onlineQuests: this.serverNpcs.getQuestSnapshot(),
+      economy: this.serverNpcs.getEconomySnapshot(),
       respawn: this.respawn.getSnapshot(),
-      audioEnabled: this.audio.isEnabled()
-    });
+      audioEnabled: this.audio.isEnabled(),
+      audioVolume: this.audio.getVolume()
+    };
+    this.hud.update(deltaTime, hudState);
+    this.overlay.update(deltaTime, hudState);
+  }
+
+  applyGameOptions(options, applyOptions = {}) {
+    this.gameOptions = options;
+    const lab = options?.lab ?? {};
+    this.world.applyOptions(lab, applyOptions);
+    this.zombies.applyOptions(lab);
+    this.towers.applyOptions(lab);
+    this.serverNpcs.applyOptions(lab);
   }
 
   createSaveSnapshot() {
@@ -333,11 +374,13 @@ export class Game {
     this.saveUnsubscribers.length = 0;
 
     this.input.dispose();
+    this.overlay.dispose();
     this.hud.dispose();
     this.story.dispose();
     this.respawn.dispose();
     this.combat.dispose();
     this.towers.dispose();
+    this.serverNpcs.dispose();
     this.zombies.dispose();
     this.player.dispose();
     this.world.dispose();
