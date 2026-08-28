@@ -25,6 +25,11 @@ export class CombatSystem {
     this.effects = new THREE.Group();
     this.effects.name = 'CombatEffects';
     this.tracers = [];
+    this.progression = null;
+  }
+
+  setProgressionSystem(progression) {
+    this.progression = progression;
   }
 
   addTo(scene) {
@@ -86,7 +91,7 @@ export class CombatSystem {
     }
 
     this.magazine -= 1;
-    this.fireCooldown = GAMEPLAY.weapon.fireInterval;
+    this.fireCooldown = this.getFireInterval();
     FIRE_ORIGIN.copy(this.player.position).add(new THREE.Vector3(0, 0.55, 0));
     FIRE_DIRECTION.set(
       this.aimPoint.x - this.player.position.x,
@@ -96,15 +101,15 @@ export class CombatSystem {
     const localTarget = this.zombieSystem.getRayTarget(
       FIRE_ORIGIN,
       FIRE_DIRECTION,
-      GAMEPLAY.weapon.range
+      this.getRange()
     );
     const onlineTarget = this.onlineNpcSystem?.getRayTarget(
       FIRE_ORIGIN,
       FIRE_DIRECTION,
-      GAMEPLAY.weapon.range
+      this.getRange()
     );
     const target = pickNearestTarget(localTarget, onlineTarget);
-    const distance = target?.distance ?? GAMEPLAY.weapon.range;
+    const distance = target?.distance ?? this.getRange();
     const end = FIRE_ORIGIN.clone().addScaledVector(FIRE_DIRECTION, distance);
     end.y = this.player.position.y + 0.55;
     this.spawnTracer(FIRE_ORIGIN, end, Boolean(target));
@@ -190,8 +195,19 @@ export class CombatSystem {
       reloading: this.reloadRemaining > 0,
       reloadProgress: this.reloadRemaining > 0
         ? 1 - this.reloadRemaining / GAMEPLAY.weapon.reloadDuration
-        : 0
+        : 0,
+      range: this.getRange(),
+      fireInterval: this.getFireInterval()
     };
+  }
+
+  getRange() {
+    return GAMEPLAY.weapon.range + (this.progression?.getSnapshot().bonuses.range ?? 0);
+  }
+
+  getFireInterval() {
+    const bonus = this.progression?.getSnapshot().bonuses.fireRate ?? 0;
+    return Math.max(0.16, GAMEPLAY.weapon.fireInterval * (1 - bonus));
   }
 
   dispose() {

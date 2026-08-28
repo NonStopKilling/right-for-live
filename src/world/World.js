@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { loadGameOptions } from '../config/gameOptions.js';
 import { WORLD } from '../utils/constants.js';
+import { CitySystem } from './CitySystem.js';
 import { LandmarkSystem } from './LandmarkSystem.js';
 import { PropSystem } from './PropSystem.js';
 import { Terrain } from './Terrain.js';
@@ -29,6 +30,7 @@ export class World {
     this.trees = new TreeSystem(this.terrain, profile);
     this.props = new PropSystem(this.terrain, profile);
     this.water = new WaterSystem(this.terrain, profile);
+    this.city = new CitySystem(this.terrain, profile);
     this.landmark = new LandmarkSystem(this.terrain, profile);
     this.options = loadGameOptions().lab;
     this.applyOptions(this.options, { rebuild: false });
@@ -50,7 +52,15 @@ export class World {
   }
 
   isWalkableWorld(x, z) {
-    return this.terrain.isWalkableWorld(x, z);
+    return this.terrain.isWalkableWorld(x, z) && !this.city.isBlockedWorld(x, z);
+  }
+
+  getBuildHeightAtWorld(x, z) {
+    return this.city.getBuildSurfaceAtWorld(x, z)?.y ?? this.getHeightAtWorld(x, z);
+  }
+
+  isCityWorld(x, z) {
+    return this.city.isCityCoreWorld(x, z);
   }
 
   findNearestResource(position, range) {
@@ -150,22 +160,30 @@ export class World {
     const layers = {
       terrain: this.terrain.createChunkGroup(cells, key),
       water: this.water.createChunkGroup(cells, key),
-      vegetation: this.trees.createChunkGroup(cells, key, this.depletedResources),
-      props: this.props.createChunkGroup(cells, key, this.depletedResources),
+      city: this.city.createChunkGroup(cells, key, this.depletedResources),
+      vegetation: this.options.mapMode === 'city'
+        ? new THREE.Group()
+        : this.trees.createChunkGroup(cells, key, this.depletedResources),
+      props: this.options.mapMode === 'city'
+        ? new THREE.Group()
+        : this.props.createChunkGroup(cells, key, this.depletedResources),
       debug: this.createChunkBorder(chunkX, chunkZ)
     };
+    layers.vegetation.name = layers.vegetation.name || `VegetationChunk-${key}`;
+    layers.props.name = layers.props.name || `PropsChunk-${key}`;
     const resources = [
-      ...this.trees.getResourceNodes(cells),
-      ...this.props.getResourceNodes(cells)
+      ...(this.options.mapMode === 'city' ? [] : this.trees.getResourceNodes(cells)),
+      ...(this.options.mapMode === 'city' ? [] : this.props.getResourceNodes(cells)),
+      ...this.city.getResourceNodes(cells)
     ].map((resource) => ({ ...resource, chunkKey: key }));
-    group.add(layers.terrain, layers.water, layers.vegetation, layers.props, layers.debug);
+    group.add(layers.terrain, layers.water, layers.city, layers.vegetation, layers.props, layers.debug);
 
     this.chunks.set(key, { chunkX, chunkZ, cells, resources, layers, group });
     this.group.add(group);
   }
 
   rebuildChunkLayer(chunk, layerName) {
-    if (layerName !== 'vegetation' && layerName !== 'props') {
+    if (layerName !== 'vegetation' && layerName !== 'props' && layerName !== 'city') {
       return;
     }
 
@@ -175,8 +193,14 @@ export class World {
     previous.clear();
 
     const next = layerName === 'vegetation'
-      ? this.trees.createChunkGroup(chunk.cells, this.chunkKey(chunk.chunkX, chunk.chunkZ), this.depletedResources)
-      : this.props.createChunkGroup(chunk.cells, this.chunkKey(chunk.chunkX, chunk.chunkZ), this.depletedResources);
+      ? this.options.mapMode === 'city'
+        ? new THREE.Group()
+        : this.trees.createChunkGroup(chunk.cells, this.chunkKey(chunk.chunkX, chunk.chunkZ), this.depletedResources)
+      : layerName === 'city'
+        ? this.city.createChunkGroup(chunk.cells, this.chunkKey(chunk.chunkX, chunk.chunkZ), this.depletedResources)
+        : this.options.mapMode === 'city'
+          ? new THREE.Group()
+          : this.props.createChunkGroup(chunk.cells, this.chunkKey(chunk.chunkX, chunk.chunkZ), this.depletedResources);
     chunk.layers[layerName] = next;
     chunk.group.add(next);
   }
@@ -223,14 +247,15 @@ export class World {
     });
   }
 
-  applyOptions(options = {}, { rebuild = true } = {}) {
+  applyOptions(options = {}, { rebuild = true, forceRebuild = false } = {}) {
     this.options = { ...this.options, ...options };
     this.terrain.applyOptions(this.options);
     this.trees.applyOptions(this.options);
     this.water.applyOptions(this.options);
+    this.city.applyOptions(this.options);
     this.setChunkDebugVisible(this.options.chunkDebug);
 
-    if (rebuild && this.options.liveRebuild) {
+    if (rebuild && (this.options.liveRebuild || forceRebuild)) {
       this.rebuildChunks();
     }
   }
@@ -274,6 +299,7 @@ export class World {
     this.props.dispose();
     this.trees.dispose();
     this.water.dispose();
+    this.city.dispose();
     this.terrain.dispose();
     this.chunkBorderGeometry.dispose();
     this.chunkBorderMaterial.dispose();

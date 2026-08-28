@@ -5,6 +5,7 @@ import { Tower } from '../entities/Tower.js';
 import { WORLD } from '../utils/constants.js';
 
 const PREVIEW_COLOR = new THREE.Color();
+const TELEPORT_COST = Object.freeze({ artifact: 20 });
 
 export class TowerSystem {
   constructor(world, player, inventory, eventBus, audio, profile, savedTowers = [], activeId = null) {
@@ -166,7 +167,9 @@ export class TowerSystem {
       return { valid: false, reason: 'aim' };
     }
 
-    if (horizontalDistance(point, this.player.position) > GAMEPLAY.tower.placementRange) {
+    const citySurface = this.world.city?.getBuildSurfaceAtWorld?.(point.x, point.z) ?? null;
+
+    if (horizontalDistance(point, this.player.position) > GAMEPLAY.tower.placementRange && citySurface?.kind !== 'roof') {
       return { valid: false, reason: 'range' };
     }
 
@@ -179,6 +182,10 @@ export class TowerSystem {
     }
 
     const { gx, gz } = this.world.terrain.worldToGrid(point.x, point.z);
+    if (citySurface?.kind === 'roof') {
+      return { valid: true, reason: null };
+    }
+
     const centerLevel = this.world.terrain.getCell(gx, gz).level;
     const neighbors = [
       this.world.terrain.getCell(gx + 1, gz).level,
@@ -201,7 +208,7 @@ export class TowerSystem {
   snapPoint(point) {
     const { gx, gz } = this.world.terrain.worldToGrid(point.x, point.z);
     const { x, z } = this.world.terrain.gridToWorld(gx, gz);
-    return new THREE.Vector3(x, this.world.getHeightAtWorld(x, z), z);
+    return new THREE.Vector3(x, this.world.getBuildHeightAtWorld?.(x, z) ?? this.world.getHeightAtWorld(x, z), z);
   }
 
   updateTowerCombat(tower, zombieSystem) {
@@ -210,7 +217,7 @@ export class TowerSystem {
     }
 
     const definition = GAMEPLAY.tower.levels[tower.level - 1];
-    const zombie = zombieSystem.findNearest(tower.position, definition.range);
+    const zombie = this.findTowerTarget(tower, zombieSystem, definition.range);
 
     if (!zombie) {
       return;
@@ -222,6 +229,32 @@ export class TowerSystem {
     this.audio.playGameEffect('tower');
     zombieSystem.damageZombie(zombie, definition.damage, `tower:${tower.id}`);
     this.eventBus.emit('tower:fired', { towerId: tower.id, zombieId: zombie.id });
+  }
+
+  findTowerTarget(tower, zombieSystem, range) {
+    if (!Array.isArray(zombieSystem.zombies)) {
+      return zombieSystem.findNearest(tower.position, range);
+    }
+
+    const candidates = zombieSystem.zombies;
+    let nearest = null;
+    let nearestDistance = range;
+
+    candidates.forEach((zombie) => {
+      if (!zombie || zombie.isDead) {
+        return;
+      }
+
+      const distance = horizontalDistance(tower.position, zombie.position);
+      if (distance > nearestDistance || this.world.city?.isSightBlockedWorld?.(tower.position, zombie.position)) {
+        return;
+      }
+
+      nearest = zombie;
+      nearestDistance = distance;
+    });
+
+    return nearest;
   }
 
   handleZombieKilled(event) {
@@ -331,6 +364,58 @@ export class TowerSystem {
     return true;
   }
 
+  teleportTower(id, targetPoint = null) {
+    const tower = this.getTowerById(id);
+    const point = this.snapPoint(targetPoint ?? this.player.position);
+    const validation = this.validateTeleport(point, tower);
+
+    if (!validation.valid) {
+      this.audio.play('blocked');
+      this.eventBus.emit('tower:placement-blocked', { reason: validation.reason });
+      return false;
+    }
+
+    if (!this.inventory.spend(TELEPORT_COST, 'tower-teleport')) {
+      this.audio.play('blocked');
+      this.eventBus.emit('tower:placement-blocked', { reason: 'teleport-cost' });
+      return false;
+    }
+
+    tower.position.set(point.x, point.y, point.z);
+    this.activeCheckpointId = tower.id;
+    this.audio.play('checkpoint');
+    this.eventBus.emit('tower:teleported', {
+      tower: tower.snapshot(),
+      cost: TELEPORT_COST,
+      activeCheckpointId: this.activeCheckpointId
+    });
+    return true;
+  }
+
+  validateTeleport(point, tower) {
+    if (!tower || !point) {
+      return { valid: false, reason: 'aim' };
+    }
+
+    const citySurface = this.world.city?.getBuildSurfaceAtWorld?.(point.x, point.z) ?? null;
+
+    if (!this.world.isWalkableWorld(point.x, point.z) && citySurface?.kind !== 'roof') {
+      return { valid: false, reason: 'slope' };
+    }
+
+    const { gx, gz } = this.world.terrain.worldToGrid(point.x, point.z);
+
+    if (this.world.terrain.isWaterGrid?.(gx, gz)) {
+      return { valid: false, reason: 'water' };
+    }
+
+    if (this.towers.some((candidate) => candidate.id !== tower.id && horizontalDistance(point, candidate.position) < 2.1)) {
+      return { valid: false, reason: 'overlap' };
+    }
+
+    return { valid: true, reason: null };
+  }
+
   getRespawnPoint() {
     const tower = this.getActiveTower();
     return tower ? tower.position.clone().add(new THREE.Vector3(0.8, 0, 0.8)) : this.world.getSpawnPoint();
@@ -384,7 +469,8 @@ export class TowerSystem {
         number: index + 1,
         active: tower.id === this.activeCheckpointId,
         damage: definition.damage,
-        nextLevelKills: nextDefinition?.kills ?? definition.kills
+        nextLevelKills: nextDefinition?.kills ?? definition.kills,
+        teleportCost: TELEPORT_COST
       };
     });
   }

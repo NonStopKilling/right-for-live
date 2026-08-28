@@ -6,13 +6,16 @@ import { GAMEPLAY } from '../src/config/gameplay.js';
 import { EventBus } from '../src/core/EventBus.js';
 import { CombatSystem } from '../src/gameplay/CombatSystem.js';
 import { CraftingSystem } from '../src/gameplay/CraftingSystem.js';
+import { CityAllySystem } from '../src/gameplay/CityAllySystem.js';
 import { Inventory } from '../src/gameplay/Inventory.js';
 import { ObjectiveSystem } from '../src/gameplay/ObjectiveSystem.js';
+import { PlayerProgressionSystem } from '../src/gameplay/PlayerProgressionSystem.js';
 import { createFreshSave, SaveSystem } from '../src/gameplay/SaveSystem.js';
 import { TowerSystem } from '../src/gameplay/TowerSystem.js';
 import { ZombieSystem } from '../src/gameplay/ZombieSystem.js';
 import { Terrain } from '../src/world/Terrain.js';
 import { TreeSystem } from '../src/world/TreeSystem.js';
+import { CitySystem } from '../src/world/CitySystem.js';
 
 const silentAudio = {
   play() {},
@@ -153,6 +156,98 @@ test('Terrain creates transparent-water candidate cells away from origin', () =>
   terrain.dispose();
 });
 
+test('City map creates proportional residential lots and urban props', () => {
+  const profile = VISUAL_PROFILES.dark;
+  const terrain = new Terrain(profile);
+  terrain.applyOptions({ mapMode: 'city' });
+  const city = new CitySystem(terrain, profile);
+  city.applyOptions({ mapMode: 'city' });
+  const cells = [
+    ...terrain.generateChunkCells(0, 0),
+    ...terrain.generateChunkCells(1, 1),
+    ...terrain.generateChunkCells(-1, 1),
+    ...terrain.generateChunkCells(0, -2),
+    ...terrain.generateChunkCells(2, 0),
+    ...terrain.generateChunkCells(3, 0),
+    ...terrain.generateChunkCells(3, 1)
+  ];
+  const group = city.createChunkGroup(cells, '1,1');
+  const names = group.children.map((child) => child.name);
+  const houseMesh = group.children.find((child) => child.name === 'CityHouse');
+  const fenceMesh = group.children.find((child) => child.name === 'CityFence');
+
+  assert.ok(names.includes('CityHouse'));
+  assert.ok(names.includes('CityRoof'));
+  assert.ok(names.includes('CityFence'));
+  assert.ok(names.includes('CityWall'));
+  assert.ok(names.includes('CityVehicle') || names.includes('CitySign') || names.includes('CityCrate'));
+  assert.ok(houseMesh.count < fenceMesh.count, 'expected large houses with multiple fence/patio parts');
+  assert.ok(city.getResourceNodes(cells).every((node) => node.layer === 'city'));
+
+  const lotCell = cells.find((cell) => city.isLotAnchor(cell.gx, cell.gz));
+  assert.ok(lotCell, 'expected at least one residential lot anchor');
+  assert.equal(city.isRoad(lotCell.gx, lotCell.gz), false);
+  const lotWorld = terrain.gridToWorld(lotCell.gx, lotCell.gz);
+  assert.equal(city.isBlockedWorld(lotWorld.x, lotWorld.z), true);
+  assert.equal(city.getBuildSurfaceAtWorld(lotWorld.x, lotWorld.z)?.kind, 'roof');
+  assert.equal(city.isSightBlockedWorld(
+    new THREE.Vector3(lotWorld.x - 5, 0, lotWorld.z),
+    new THREE.Vector3(lotWorld.x + 5, 0, lotWorld.z)
+  ), true);
+
+  const vehicleCell = cells.find((cell) => city.shouldPlaceVehicle(cell));
+  if (vehicleCell) {
+    const vehicleWorld = terrain.gridToWorld(vehicleCell.gx, vehicleCell.gz);
+    assert.equal(city.isBlockedWorld(vehicleWorld.x, vehicleWorld.z), true);
+  }
+
+  const cityResources = city.getResourceNodes(cells);
+  assert.ok(cityResources.some((node) => node.type === 'wood' || node.type === 'stone'), 'expected plazas to expose harvestable trees or stones');
+  city.dispose();
+  terrain.dispose();
+});
+
+test('City roads stay inside city and outside area only keeps highway', () => {
+  const terrain = new Terrain(VISUAL_PROFILES.dark);
+  terrain.applyOptions({ mapMode: 'city' });
+
+  assert.equal(terrain.isCityRoad(28, 0), true);
+  assert.equal(terrain.isCityRoad(84, 84), false);
+  assert.equal(terrain.isTrail(0, 96), true);
+  assert.equal(terrain.isTrail(28, 96), false);
+  terrain.dispose();
+});
+
+test('City procedural density options control visible map items', () => {
+  const terrain = new Terrain(VISUAL_PROFILES.dark);
+  terrain.applyOptions({ mapMode: 'city' });
+  const city = new CitySystem(terrain, VISUAL_PROFILES.dark);
+  city.applyOptions({
+    mapMode: 'city',
+    cityDensity: 0,
+    cityVehicleDensity: 0,
+    cityResourceDensity: 0,
+    cityTrenchDensity: 0
+  });
+  const cells = [
+    ...terrain.generateChunkCells(0, 0),
+    ...terrain.generateChunkCells(1, 1),
+    ...terrain.generateChunkCells(3, 1),
+    ...terrain.generateChunkCells(0, -4)
+  ];
+  const group = city.createChunkGroup(cells, 'density-off');
+  const names = group.children.map((child) => child.name);
+
+  assert.equal(names.includes('CityHouse'), false);
+  assert.equal(names.includes('CityVehicle'), false);
+  assert.equal(names.includes('CityCrate'), false);
+  assert.equal(names.includes('CityTrench'), false);
+  assert.equal(city.getResourceNodes(cells).length, 0);
+  assert.ok(names.includes('CityRoadLine'), 'expected highway continuity marks outside city');
+  city.dispose();
+  terrain.dispose();
+});
+
 test('Combat reload transfers only available reserve ammunition', () => {
   const bus = new EventBus();
   const inventory = new Inventory(bus, { ammoReserve: 3 });
@@ -229,6 +324,104 @@ test('Tower construction spends resources, tower kills grant xp, and towers can 
   towers.dispose();
 });
 
+test('Tower target selection ignores zombies hidden behind city blockers', () => {
+  const towers = new TowerSystem(
+    {
+      ...createWorldMock(),
+      city: {
+        isSightBlockedWorld() {
+          return true;
+        }
+      }
+    },
+    createPlayerMock(),
+    new Inventory(new EventBus(), { wood: 10, stone: 10, artifact: 10 }),
+    new EventBus(),
+    silentAudio,
+    VISUAL_PROFILES.dark
+  );
+  const target = towers.findTowerTarget(
+    { position: new THREE.Vector3(0, 0, 0) },
+    { zombies: [{ id: 'hidden', position: new THREE.Vector3(1, 0, 0), isDead: false }] },
+    8
+  );
+  assert.equal(target, null);
+  towers.dispose();
+});
+
+test('Tower teleport costs 20 artifacts and moves an existing tower', () => {
+  const bus = new EventBus();
+  const inventory = new Inventory(bus, {
+    wood: GAMEPLAY.tower.cost.wood,
+    stone: GAMEPLAY.tower.cost.stone,
+    artifact: 25
+  });
+  const world = createWorldMock();
+  const towers = new TowerSystem(
+    world,
+    createPlayerMock(),
+    inventory,
+    bus,
+    silentAudio,
+    VISUAL_PROFILES.dark
+  );
+
+  towers.previewPoint = new THREE.Vector3(0.84, world.getHeightAtWorld(0.84, 0), 0);
+  assert.equal(towers.confirmPlacement(), true);
+  const tower = towers.towers[0];
+  assert.equal(towers.teleportTower(tower.id, new THREE.Vector3(4.2, 0, -3.36)), true);
+  assert.equal(inventory.get('artifact'), 4);
+  assert.equal(tower.position.x, 4.2);
+  assert.equal(tower.position.z, -3.36);
+  towers.dispose();
+});
+
+test('PlayerProgressionSystem levels every 1000 XP and improves combat stats', () => {
+  const bus = new EventBus();
+  const inventory = new Inventory(bus, { experience: 2100 });
+  const player = createPlayerMock();
+  const progression = new PlayerProgressionSystem(player, inventory, bus);
+  const combat = new CombatSystem(
+    new THREE.OrthographicCamera(),
+    player,
+    { getRayTarget() { return null; } },
+    inventory,
+    bus,
+    silentAudio,
+    6
+  );
+  combat.setProgressionSystem(progression);
+
+  assert.equal(progression.getSnapshot().level, 3);
+  assert.equal(player.maxHealth, 124);
+  assert.ok(combat.getRange() > GAMEPLAY.weapon.range);
+  assert.ok(combat.getFireInterval() < GAMEPLAY.weapon.fireInterval);
+  combat.dispose();
+});
+
+test('CityAllySystem fires at nearby zombies only in city mode', () => {
+  const bus = new EventBus();
+  const events = [];
+  bus.on('city:ally-fired', (event) => events.push(event));
+  const allies = new CityAllySystem(createWorldMock(), bus, silentAudio);
+  allies.applyOptions({ mapMode: 'city' });
+  const zombie = { id: 'z-city', position: new THREE.Vector3(-5.2, 0, -4.1) };
+  const zombieSystem = {
+    findNearest() {
+      return zombie;
+    },
+    damageZombie(target, amount, source) {
+      assert.equal(target, zombie);
+      assert.equal(amount, 18);
+      assert.match(source, /^ally:/);
+    }
+  };
+
+  allies.update(1, zombieSystem);
+  assert.ok(events.length > 0);
+  allies.dispose();
+});
+
 function findWaterCell(terrain) {
   for (let gz = -120; gz < -28; gz += 1) {
     for (let gx = -48; gx <= 48; gx += 1) {
@@ -266,6 +459,9 @@ function createWorldMock() {
     },
     isWalkableWorld() {
       return true;
+    },
+    isCityWorld() {
+      return false;
     }
   };
 }

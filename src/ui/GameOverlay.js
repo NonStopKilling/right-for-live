@@ -47,6 +47,7 @@ const DEFAULT_OPTIONS = Object.freeze({
   microphoneEnabled: false,
   showTowerPanel: true,
   showObjective: true,
+  showMinimap: true,
   damageWarnings: true,
   cameraAssist: true,
   highContrastHud: false,
@@ -141,6 +142,7 @@ export class GameOverlay {
             </label>
             <label class="overlay-toggle"><input type="checkbox" data-option="showTowerPanel"> Panel de torres</label>
             <label class="overlay-toggle"><input type="checkbox" data-option="showObjective"> Objetivo visible</label>
+            <label class="overlay-toggle"><input type="checkbox" data-option="showMinimap"> Minimapa y brujula</label>
             <label class="overlay-toggle"><input type="checkbox" data-option="damageWarnings"> Alertas de dano</label>
             <label class="overlay-toggle"><input type="checkbox" data-option="cameraAssist"> Asistencia de camara</label>
             <label class="overlay-toggle"><input type="checkbox" data-option="highContrastHud"> HUD alto contraste</label>
@@ -149,6 +151,12 @@ export class GameOverlay {
           <section class="overlay-panel overlay-panel--lab" data-panel="lab">
             <div class="overlay-lab-toolbar">
               <b>MODO CONSTRUCTOR</b>
+              <label>Mapa
+                <select data-lab-option="mapMode">
+                  <option value="forest">Bosque</option>
+                  <option value="city">Ciudad</option>
+                </select>
+              </label>
               <button class="overlay-secondary" type="button" data-action="reset-lab">Reset LAB</button>
             </div>
             ${this.createLabGroup('Mundo procedural', [
@@ -158,7 +166,11 @@ export class GameOverlay {
               ['treeShapeVariety', 'Formas arboles', 'range', 0, 160, 1],
               ['treeColorVariety', 'Color arboles', 'range', 0, 160, 1],
               ['waterAmount', 'Agua procedural', 'range', 0, 200, 1],
-              ['waterOpacity', 'Transparencia agua', 'range', 8, 86, 1]
+              ['waterOpacity', 'Transparencia agua', 'range', 8, 86, 1],
+              ['cityDensity', 'Densidad ciudad', 'range', 0, 160, 1],
+              ['cityVehicleDensity', 'Vehiculos ciudad', 'range', 0, 160, 1],
+              ['cityResourceDensity', 'Items ciudad', 'range', 0, 220, 1],
+              ['cityTrenchDensity', 'Trincheras ciudad', 'range', 0, 180, 1]
             ])}
             ${this.createLabGroup('Dinamicas y amenaza', [
               ['zombieSpawnRate', 'Ritmo zombies', 'range', 10, 260, 1],
@@ -337,7 +349,7 @@ export class GameOverlay {
     } else if (action === 'reset-lab') {
       this.options.lab = structuredClone(DEFAULT_LAB_OPTIONS);
       this.saveOptions();
-      this.actions.applyGameOptions?.(this.options);
+      this.actions.applyGameOptions?.(this.options, { rebuild: true, forceRebuild: true });
       this.renderLabFields();
     }
   }
@@ -347,9 +359,9 @@ export class GameOverlay {
 
     if (labOption) {
       const element = event.target;
-      this.options.lab[labOption] = element.type === 'checkbox' ? element.checked : Number(element.value);
+      this.options.lab[labOption] = parseLabValue(element);
       this.saveOptions();
-      this.actions.applyGameOptions?.(this.options);
+      this.actions.applyGameOptions?.(this.options, { rebuild: true, forceRebuild: true });
       this.renderLabFields();
       return;
     }
@@ -691,6 +703,7 @@ export class GameOverlay {
     document.documentElement.dataset.hudContrast = this.options.highContrastHud ? 'high' : 'normal';
     this.root.classList.toggle('hide-tower-panel', !this.options.showTowerPanel);
     this.root.classList.toggle('hide-objective-panel', !this.options.showObjective);
+    this.root.classList.toggle('hide-minimap', !this.options.showMinimap);
     this.refs['volume-output'].textContent = `${this.options.masterVolume}%`;
     this.refs['chat-opacity-output'].textContent = `${this.options.chatOpacity}%`;
     this.refs['mic-meter'].style.width = this.options.microphoneEnabled ? '64%' : '8%';
@@ -810,11 +823,27 @@ function formatQuestState(state) {
 }
 
 function formatLabValue(key, value) {
+  if (key === 'mapMode') {
+    return value === 'city' ? 'Ciudad' : 'Bosque';
+  }
+
   if (key === 'seedOffset') {
     return String(value);
   }
 
   return `${value}%`;
+}
+
+function parseLabValue(element) {
+  if (element.type === 'checkbox') {
+    return element.checked;
+  }
+
+  if (element.tagName === 'SELECT') {
+    return element.value;
+  }
+
+  return Number(element.value);
 }
 
 function formatResources(resources) {

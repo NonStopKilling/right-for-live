@@ -28,6 +28,8 @@ export class ZombieSystem {
     this.sharedMaterials = this.createSharedMaterials();
     this.lootGeometry = new THREE.BoxGeometry(0.13, 0.13, 0.13);
     this.lootMaterials = new Map();
+    this.cityHordeTimer = 38;
+    this.cityHordeWarningIssued = false;
   }
 
   addTo(scene) {
@@ -70,6 +72,12 @@ export class ZombieSystem {
       return;
     }
 
+    if (this.world.isCityWorld(this.player.position.x, this.player.position.z)) {
+      this.updateCityHorde(deltaTime);
+      this.updateExistingZombies(deltaTime);
+      return;
+    }
+
     this.spawnTimer -= deltaTime;
 
     if (this.spawnTimer <= 0) {
@@ -77,6 +85,10 @@ export class ZombieSystem {
       this.trySpawn();
     }
 
+    this.updateExistingZombies(deltaTime);
+  }
+
+  updateExistingZombies(deltaTime) {
     for (let index = this.zombies.length - 1; index >= 0; index -= 1) {
       const zombie = this.zombies[index];
       const distanceFromPlayer = horizontalDistance(zombie.position, this.player.position);
@@ -98,7 +110,31 @@ export class ZombieSystem {
     }
   }
 
-  trySpawn() {
+  updateCityHorde(deltaTime) {
+    this.cityHordeTimer -= deltaTime;
+
+    if (!this.cityHordeWarningIssued && this.cityHordeTimer <= 10) {
+      this.cityHordeWarningIssued = true;
+      this.eventBus.emit('city:horde-warning', { seconds: 10 });
+    }
+
+    if (this.cityHordeTimer > 0) {
+      return;
+    }
+
+    const count = 8 + Math.floor(Math.min(8, this.inventory.get('experience') / 1000));
+    let spawned = 0;
+
+    for (let index = 0; index < count; index += 1) {
+      spawned += Number(this.trySpawn(true));
+    }
+
+    this.cityHordeTimer = 72;
+    this.cityHordeWarningIssued = false;
+    this.eventBus.emit('city:horde-started', { count: spawned });
+  }
+
+  trySpawn(forceCityHorde = false) {
     const maxActive = Math.max(0, Math.round(GAMEPLAY.zombie.maxActive * Number(this.options.zombieMaxActive) / 100));
 
     if (this.zombies.length >= maxActive || this.player.isDead) {
@@ -112,6 +148,10 @@ export class ZombieSystem {
         (GAMEPLAY.zombie.spawnMaxRadius - GAMEPLAY.zombie.spawnMinRadius);
     const x = this.player.position.x + Math.cos(angle) * radius;
     const z = this.player.position.z + Math.sin(angle) * radius;
+
+    if (!forceCityHorde && this.world.isCityWorld(x, z)) {
+      return false;
+    }
 
     if (!this.world.isWalkableWorld(x, z) || this.towerSystem?.isInsideSafeZone(x, z)) {
       return false;

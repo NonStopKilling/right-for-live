@@ -21,7 +21,8 @@ const BUILD_REASONS = {
   overlap: 'DEMASIADO CERCA DE OTRA TORRE',
   slope: 'TERRENO INESTABLE',
   water: 'NO SE PUEDE CONSTRUIR EN AGUA',
-  'max-towers': 'LIMITE DE TORRES ALCANZADO'
+  'max-towers': 'LIMITE DE TORRES ALCANZADO',
+  'teleport-cost': 'TELETRANSPORTE CUESTA 20 EXTRANOS'
 };
 
 export class GameHud {
@@ -35,14 +36,14 @@ export class GameHud {
     this.element.className = 'game-hud';
     this.element.innerHTML = `
       <section class="hud-status hud-frame" aria-label="Estado del jugador">
-        <div class="hud-kicker"><span>DIA 01</span><span class="hud-time">18:42</span></div>
+        <div class="hud-kicker"><span>DIA 01</span><span class="hud-time" data-hud="map-mode">BOSQUE</span></div>
         <div class="hud-health-row">
           <span>VIDA</span>
           <div class="hud-meter"><i data-hud="health-fill"></i></div>
           <b data-hud="health-text">100</b>
         </div>
         <div class="hud-weapon-row">
-          <span>REVOLVER</span>
+          <span>REVOLVER · NV <i data-hud="player-level">1</i></span>
           <b><i data-hud="magazine">6</i> / <i data-hud="reserve">24</i></b>
           <span class="hud-reload" data-hud="reload">LISTO</span>
         </div>
@@ -68,6 +69,17 @@ export class GameHud {
       <section class="hud-tower-list hud-frame" aria-label="Torres desplegadas">
         <div class="hud-kicker"><span>TORRES</span><span data-hud="tower-count">0/12</span></div>
         <div class="hud-tower-list__items" data-hud="tower-list"></div>
+      </section>
+
+      <section class="hud-minimap hud-frame" aria-label="Minimapa">
+        <div class="hud-kicker"><span>MAPA</span><span data-hud="minimap-zone">N</span></div>
+        <div class="hud-minimap__radar" data-hud="minimap-radar">
+          <span class="hud-minimap__grid"></span>
+          <span class="hud-minimap__north">N</span>
+          <span class="hud-minimap__player"></span>
+          <span class="hud-minimap__objective" data-hud="minimap-objective"></span>
+          <span class="hud-minimap__items" data-hud="minimap-items"></span>
+        </div>
       </section>
 
       <button class="hud-objective hud-frame" type="button" data-action="story" aria-label="Abrir transmision actual">
@@ -125,6 +137,18 @@ export class GameHud {
       eventBus.on('player:experience', ({ amount }) => {
         this.showNotification(`+${amount} XP POR TORRE`);
       }),
+      eventBus.on('player:leveled', ({ level }) => {
+        this.showNotification(`NIVEL ${level}: HP Y ARMA MEJORADOS`);
+      }),
+      eventBus.on('city:horde-warning', ({ seconds }) => {
+        this.showNotification(`HORDA URBANA EN ${seconds}s`);
+      }),
+      eventBus.on('city:horde-started', ({ count }) => {
+        this.showNotification(`HORDA URBANA: ${count} ENEMIGOS`);
+      }),
+      eventBus.on('tower:teleported', () => {
+        this.showNotification('TORRE TELETRANSPORTADA -20 EXTRANO');
+      }),
       eventBus.on('tower:placement-blocked', ({ reason }) => {
         this.showNotification(BUILD_REASONS[reason] ?? 'NO SE PUEDE CONSTRUIR');
       }),
@@ -151,6 +175,8 @@ export class GameHud {
     this.refs['health-fill'].style.width = `${Math.max(0, healthRatio) * 100}%`;
     this.refs['health-text'].textContent = String(Math.ceil(state.player.health));
     this.refs.magazine.textContent = String(state.weapon.magazine);
+    this.refs['player-level'].textContent = String(state.progression?.level ?? 1);
+    this.refs['map-mode'].textContent = state.mapMode === 'city' ? 'CIUDAD' : 'BOSQUE';
     this.refs.reserve.textContent = String(state.weapon.reserve);
     this.refs.reload.textContent = state.weapon.reloading ? 'RECARGANDO' : 'LISTO';
     this.refs.reload.classList.toggle('is-active', state.weapon.reloading);
@@ -173,6 +199,7 @@ export class GameHud {
     this.refs['objective-title'].textContent = state.objective?.title ?? state.story.title;
     this.refs['objective-hint'].textContent = state.objective?.hint ?? state.story.hint;
     this.updateTowerList(state.towers ?? []);
+    this.updateMinimap(state);
     this.updateContext(state);
     this.updateTransmission(state.story);
     this.updateDeath(state.respawn);
@@ -225,6 +252,18 @@ export class GameHud {
   }
 
   updateTowerList(towers) {
+    const signature = JSON.stringify(towers.map((tower) => ({
+      id: tower.id,
+      level: tower.level,
+      kills: tower.kills,
+      active: tower.active
+    })));
+
+    if (signature === this.towerListSignature) {
+      return;
+    }
+
+    this.towerListSignature = signature;
     this.refs['tower-count'].textContent = `${towers.length}/12`;
 
     if (towers.length === 0) {
@@ -243,10 +282,28 @@ export class GameHud {
           <b>T${String(tower.number).padStart(2, '0')}</b>
           <small>N${tower.level} ${progress}</small>
         </div>
-        <button type="button" data-action="dismantle-tower" data-tower-id="${tower.id}" aria-label="Desligar torre ${tower.number}" title="Desligar torre">X</button>
+        <button type="button" data-action="teleport-tower" data-tower-id="${tower.id}" aria-label="Teletransportar torre ${tower.number}" title="Teletransportar torre por 20 extranos">TP</button>
+        <button type="button" data-action="dismantle-tower" data-tower-id="${tower.id}" aria-label="Desligar torre ${tower.number}" title="Desligar torre">DES</button>
       `;
       return row;
     }));
+  }
+
+  updateMinimap(state) {
+    const scale = 2.15;
+    const player = state.position ?? { x: 0, z: 0 };
+    this.refs['minimap-zone'].textContent = state.mapMode === 'city' ? 'CIUDAD' : 'BOSQUE';
+    this.refs['minimap-objective'].style.transform = `translate(${clampMap(-player.x * scale)}px, ${clampMap((-state.objective.target - player.z) * scale)}px)`;
+    this.refs['minimap-objective'].title = state.objective?.title ?? 'Objetivo';
+
+    const towerDots = (state.towers ?? []).map((tower) => {
+      const dot = document.createElement('span');
+      dot.className = `hud-minimap__dot${tower.active ? ' is-active' : ''}`;
+      dot.style.transform = `translate(${clampMap((tower.x - player.x) * scale)}px, ${clampMap((tower.z - player.z) * scale)}px)`;
+      dot.title = `Torre ${tower.number} nivel ${tower.level}`;
+      return dot;
+    });
+    this.refs['minimap-items'].replaceChildren(...towerDots);
   }
 
   updateTransmission(story) {
@@ -292,6 +349,9 @@ export class GameHud {
     } else if (action === 'dismantle-tower') {
       const towerId = event.target.closest('[data-tower-id]')?.dataset.towerId;
       this.actions.dismantleTower?.(towerId);
+    } else if (action === 'teleport-tower') {
+      const towerId = event.target.closest('[data-tower-id]')?.dataset.towerId;
+      this.actions.teleportTower?.(towerId);
     }
   }
 
@@ -301,4 +361,8 @@ export class GameHud {
     this.unsubscribers.length = 0;
     this.element.remove();
   }
+}
+
+function clampMap(value) {
+  return Math.max(-47, Math.min(47, value));
 }

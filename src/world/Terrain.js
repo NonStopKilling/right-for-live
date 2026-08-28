@@ -18,6 +18,17 @@ export class Terrain {
 
   applyOptions(options = {}) {
     this.options = { ...this.options, ...options };
+    if (this.isCityMap()) {
+      this.materials.trail.color.setHex(0x585858);
+      this.materials.trail.emissive.setHex(0x111111);
+      this.materials.trail.emissiveIntensity = 0.04;
+      this.materials.trail.roughness = 0.9;
+    } else {
+      this.materials.trail.color.setHex(0xffffff);
+      this.materials.trail.emissive.setHex(this.profile.palette.trail[0]);
+      this.materials.trail.emissiveIntensity = this.profile.id === 'dark' ? 0.22 : 0.08;
+      this.materials.trail.roughness = 0.72;
+    }
   }
 
   createMaterials() {
@@ -56,6 +67,7 @@ export class Terrain {
   }
 
   getCell(gx, gz) {
+    const city = this.isCityMap();
     const elevation = fractalNoise2D(gx, gz, this.seed(101));
     const broadElevation = valueNoise2D(gx, gz, 46, this.seed(109));
     const moisture = valueNoise2D(gx, gz, 31, this.seed(211));
@@ -70,7 +82,7 @@ export class Terrain {
       forest = clamp(forest + 0.29, 0, 1);
     }
 
-    const relief = clamp(Number(this.options.terrainRelief) / 100, 0.35, 1.8);
+    const relief = city ? 0.38 : clamp(Number(this.options.terrainRelief) / 100, 0.35, 1.8);
     let level = 1 + Math.floor(clamp((elevation * 0.74 + broadElevation * 0.26 - 0.2) * 4.7 * relief, 0, WORLD.maxTerrainLevel - 1));
 
     if (distanceFromOrigin < WORLD.originClearRadius) {
@@ -87,12 +99,16 @@ export class Terrain {
       surface = 'moss';
     }
 
-    if (this.isTrail(gx, gz)) {
+    if (city && this.isTrail(gx, gz)) {
+      surface = 'trail';
+      forest = 0;
+    } else if (this.isTrail(gx, gz)) {
       surface = 'trail';
     }
 
     const waterThreshold = 0.82 - clamp(Number(this.options.waterAmount) / 100, 0, 2) * 0.16;
-    const water = Boolean(this.options.waterEnabled) &&
+    const water = !city &&
+      Boolean(this.options.waterEnabled) &&
       !this.isTrail(gx, gz) &&
       distanceFromOrigin > WORLD.originClearRadius + 4 &&
       northDistance > 28 &&
@@ -237,6 +253,16 @@ export class Terrain {
       family = 'soil';
     }
 
+    if (this.isCityMap() && kind === 'trail') {
+      const roadShade = 0.14 + hash2D(cell.gx, cell.gz, this.seed(612)) * 0.08;
+      return COLOR.setRGB(roadShade, roadShade, roadShade * 0.96).getHex();
+    }
+
+    if (this.isCityMap() && kind === 'surface') {
+      const lotShade = cell.surface === 'soil' ? 0x7d6a4d : 0x6f8148;
+      return COLOR.setHex(lotShade).multiplyScalar(0.9 + hash2D(cell.gx, cell.gz, this.seed(618)) * 0.12).getHex();
+    }
+
     const palette = this.profile.palette[family];
     const region = valueNoise2D(cell.gx, cell.gz, 9, this.seed(503));
     const detail = hash2D(cell.gx, cell.gz, this.seed(layer * 43 + 509));
@@ -248,6 +274,10 @@ export class Terrain {
   }
 
   isTrail(gx, gz) {
+    if (this.isCityMap()) {
+      return this.isCityRoad(gx, gz) || this.isCityHighway(gx, gz);
+    }
+
     const centerLine = Math.round(Math.sin(gx * 0.17) * 2.2 + Math.sin(gx * 0.055) * 3.1);
     const ribbon = Math.abs(gz - centerLine) === 0 && Math.abs(gx) < 52;
     const ring = Math.abs(Math.hypot(gx, gz) - 5.2) < 0.52;
@@ -270,6 +300,25 @@ export class Terrain {
 
   isWaterGrid(gx, gz) {
     return this.getCell(gx, gz).water;
+  }
+
+  isCityMap() {
+    return this.options.mapMode === 'city';
+  }
+
+  isCityRoad(gx, gz) {
+    if (Math.abs(gx) > 52 || Math.abs(gz) > 52) {
+      return false;
+    }
+
+    return Math.abs(modCentered(gx, 28)) <= 3 ||
+      Math.abs(modCentered(gz, 28)) <= 3 ||
+      Math.abs(gx) <= 3 ||
+      Math.abs(gz) <= 3;
+  }
+
+  isCityHighway(gx, gz) {
+    return Math.abs(gx) <= 4 && Math.abs(gz) > 52;
   }
 
   seed(offset) {
@@ -311,4 +360,8 @@ export class Terrain {
     this.geometry.dispose();
     Object.values(this.materials).forEach((material) => material.dispose());
   }
+}
+
+function modCentered(value, size) {
+  return ((value % size) + size + size / 2) % size - size / 2;
 }

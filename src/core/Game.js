@@ -5,8 +5,10 @@ import { resolveVisualProfile } from '../config/visualProfiles.js';
 import { Player } from '../entities/Player.js';
 import { CombatSystem } from '../gameplay/CombatSystem.js';
 import { CraftingSystem } from '../gameplay/CraftingSystem.js';
+import { CityAllySystem } from '../gameplay/CityAllySystem.js';
 import { Inventory } from '../gameplay/Inventory.js';
 import { ObjectiveSystem } from '../gameplay/ObjectiveSystem.js';
+import { PlayerProgressionSystem } from '../gameplay/PlayerProgressionSystem.js';
 import { ResourceSystem } from '../gameplay/ResourceSystem.js';
 import { RespawnSystem } from '../gameplay/RespawnSystem.js';
 import { createFreshSave, SaveSystem } from '../gameplay/SaveSystem.js';
@@ -31,6 +33,7 @@ const SAVE_EVENTS = [
   'tower:progress',
   'tower:leveled',
   'tower:dismantled',
+  'tower:teleported',
   'story:advanced',
   'potion:crafted',
   'potion:used',
@@ -99,6 +102,8 @@ export class Game {
       this.saveState.magazine,
       this.serverNpcs
     );
+    this.progression = new PlayerProgressionSystem(this.player, this.inventory, this.eventBus);
+    this.combat.setProgressionSystem(this.progression);
     this.resources = new ResourceSystem(
       this.world,
       this.inventory,
@@ -111,6 +116,7 @@ export class Game {
       this.eventBus,
       this.audio
     );
+    this.cityAllies = new CityAllySystem(this.world, this.eventBus, this.audio);
     this.objectives = new ObjectiveSystem(
       this.player,
       this.eventBus,
@@ -136,6 +142,7 @@ export class Game {
       reopenStory: () => this.story.reopen(),
       dismissStory: () => this.story.dismiss(),
       dismantleTower: (id) => this.towers.dismantleTower(id),
+      teleportTower: (id) => this.towers.teleportTower(id, this.combat.aimPoint ?? this.player.position),
       applyInputSettings: () => this.input.reloadSettings(),
       setAudioVolume: (value) => this.audio.setVolume(value)
     });
@@ -146,7 +153,7 @@ export class Game {
       startQuest: (questId) => this.serverNpcs.startQuest(questId),
       trade: (merchantId, offerId) => this.serverNpcs.trade(merchantId, offerId),
       registerProfile: (profile) => this.serverNpcs.registerProfile(profile),
-      applyGameOptions: (options) => this.applyGameOptions(options)
+      applyGameOptions: (options, applyOptions) => this.applyGameOptions(options, applyOptions)
     });
     this.applyGameOptions(this.gameOptions, { rebuild: false });
     this.animationFrameId = 0;
@@ -162,6 +169,7 @@ export class Game {
     this.world.addTo(this.scene);
     this.towers.addTo(this.scene);
     this.zombies.addTo(this.scene);
+    this.cityAllies.addTo(this.scene);
     this.serverNpcs.addTo(this.scene);
     this.combat.addTo(this.scene);
     this.player.addTo(this.scene);
@@ -279,9 +287,11 @@ export class Game {
     this.combat.update(deltaTime, this.input, acceptsCombatInput, acceptsCombatInput);
     this.crafting.update(this.input, paused);
     this.zombies.update(deltaTime, paused);
+    this.cityAllies.update(deltaTime, this.zombies);
     this.serverNpcs.update(deltaTime);
     this.respawn.update(deltaTime);
     this.objectives.update();
+    this.progression.update();
     this.cameraController.update(deltaTime, this.player.position);
     this.updateLightingPosition();
     this.updateHud(deltaTime);
@@ -298,11 +308,17 @@ export class Game {
       towers: this.towers.getListSnapshot(),
       story: this.story.getSnapshot(),
       objective: this.objectives.getSnapshot(),
+      progression: this.progression.getSnapshot(),
+      mapMode: this.gameOptions.lab?.mapMode ?? 'forest',
       onlineQuests: this.serverNpcs.getQuestSnapshot(),
       economy: this.serverNpcs.getEconomySnapshot(),
       respawn: this.respawn.getSnapshot(),
       audioEnabled: this.audio.isEnabled(),
-      audioVolume: this.audio.getVolume()
+      audioVolume: this.audio.getVolume(),
+      position: {
+        x: this.player.position.x,
+        z: this.player.position.z
+      }
     };
     this.hud.update(deltaTime, hudState);
     this.overlay.update(deltaTime, hudState);
@@ -315,6 +331,7 @@ export class Game {
     this.zombies.applyOptions(lab);
     this.towers.applyOptions(lab);
     this.serverNpcs.applyOptions(lab);
+    this.cityAllies.applyOptions(lab);
   }
 
   createSaveSnapshot() {
@@ -381,6 +398,7 @@ export class Game {
     this.combat.dispose();
     this.towers.dispose();
     this.serverNpcs.dispose();
+    this.cityAllies.dispose();
     this.zombies.dispose();
     this.player.dispose();
     this.world.dispose();

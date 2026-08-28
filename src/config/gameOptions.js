@@ -15,6 +15,7 @@ export const DEFAULT_KEYBINDS = Object.freeze({
 });
 
 export const DEFAULT_LAB_OPTIONS = Object.freeze({
+  mapMode: 'forest',
   liveRebuild: true,
   seedOffset: 0,
   terrainRelief: 100,
@@ -24,6 +25,10 @@ export const DEFAULT_LAB_OPTIONS = Object.freeze({
   waterEnabled: true,
   waterAmount: 100,
   waterOpacity: 42,
+  cityDensity: 70,
+  cityVehicleDensity: 45,
+  cityResourceDensity: 100,
+  cityTrenchDensity: 100,
   localZombies: true,
   serverNpcs: true,
   zombieSpawnRate: 100,
@@ -48,6 +53,7 @@ export const DEFAULT_GAME_OPTIONS = Object.freeze({
   microphoneEnabled: false,
   showTowerPanel: true,
   showObjective: true,
+  showMinimap: true,
   damageWarnings: true,
   cameraAssist: true,
   highContrastHud: false,

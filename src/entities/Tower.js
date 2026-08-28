@@ -11,7 +11,7 @@ export class Tower {
     this.constructionProgress = animateConstruction ? 0 : 1;
     this.group = new THREE.Group();
     this.group.name = `SignalRefuge-${this.id}`;
-    this.group.position.set(data.x, world.getHeightAtWorld(data.x, data.z), data.z);
+    this.group.position.set(data.x, world.getBuildHeightAtWorld?.(data.x, data.z) ?? world.getHeightAtWorld(data.x, data.z), data.z);
     this.position = this.group.position;
     this.createMesh();
     this.applyLevel(this.level);
