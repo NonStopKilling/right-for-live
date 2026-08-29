@@ -169,7 +169,8 @@ test('City map creates proportional residential lots and urban props', () => {
     ...terrain.generateChunkCells(0, -2),
     ...terrain.generateChunkCells(2, 0),
     ...terrain.generateChunkCells(3, 0),
-    ...terrain.generateChunkCells(3, 1)
+    ...terrain.generateChunkCells(3, 1),
+    ...terrain.generateChunkCells(6, 0)
   ];
   const group = city.createChunkGroup(cells, '1,1');
   const names = group.children.map((child) => child.name);
@@ -212,9 +213,45 @@ test('City roads stay inside city and outside area only keeps highway', () => {
   terrain.applyOptions({ mapMode: 'city' });
 
   assert.equal(terrain.isCityRoad(28, 0), true);
-  assert.equal(terrain.isCityRoad(84, 84), false);
-  assert.equal(terrain.isTrail(0, 96), true);
-  assert.equal(terrain.isTrail(28, 96), false);
+  assert.equal(terrain.isCityRoad(140, 140), false);
+  assert.equal(terrain.isTrail(0, 140), true);
+  assert.equal(terrain.isTrail(28, 140), false);
+  assert.equal(terrain.getCell(0, 140).level, 1);
+  assert.equal(terrain.getCell(28, 0).level, 1);
+  terrain.dispose();
+});
+
+test('City wall leaves visible gate corridors for entering and leaving', () => {
+  const terrain = new Terrain(VISUAL_PROFILES.dark);
+  terrain.applyOptions({ mapMode: 'city' });
+  const city = new CitySystem(terrain, VISUAL_PROFILES.dark);
+  city.applyOptions({ mapMode: 'city' });
+  const gate = terrain.gridToWorld(0, 108);
+  const wall = terrain.gridToWorld(18, 108);
+
+  assert.equal(city.isBlockedWorld(gate.x, gate.z), false);
+  assert.equal(city.isBlockedWorld(wall.x, wall.z), true);
+  city.dispose();
+  terrain.dispose();
+});
+
+test('City mode keeps forest resources outside the city perimeter', () => {
+  const terrain = new Terrain(VISUAL_PROFILES.dark);
+  terrain.applyOptions({ mapMode: 'city', forestDensity: 160 });
+  const city = new CitySystem(terrain, VISUAL_PROFILES.dark);
+  city.applyOptions({ mapMode: 'city' });
+  const trees = new TreeSystem(terrain, VISUAL_PROFILES.dark);
+  trees.applyOptions({ mapMode: 'city', forestDensity: 160 });
+  const cells = [
+    ...terrain.generateChunkCells(0, 8),
+    ...terrain.generateChunkCells(1, 8),
+    ...terrain.generateChunkCells(-1, 8)
+  ].filter((cell) => !city.isInsideCity(cell.gx, cell.gz));
+  const resources = trees.getResourceNodes(cells);
+
+  assert.ok(resources.some((resource) => resource.layer === 'vegetation' && Math.abs(resource.gz) > 108));
+  trees.dispose();
+  city.dispose();
   terrain.dispose();
 });
 
@@ -233,7 +270,7 @@ test('City procedural density options control visible map items', () => {
     ...terrain.generateChunkCells(0, 0),
     ...terrain.generateChunkCells(1, 1),
     ...terrain.generateChunkCells(3, 1),
-    ...terrain.generateChunkCells(0, -4)
+    ...terrain.generateChunkCells(0, -8)
   ];
   const group = city.createChunkGroup(cells, 'density-off');
   const names = group.children.map((child) => child.name);
@@ -395,6 +432,36 @@ test('PlayerProgressionSystem levels every 1000 XP and improves combat stats', (
   assert.equal(progression.getSnapshot().level, 3);
   assert.equal(player.maxHealth, 124);
   assert.ok(combat.getRange() > GAMEPLAY.weapon.range);
+  assert.ok(combat.getFireInterval() < GAMEPLAY.weapon.fireInterval);
+  combat.dispose();
+});
+
+test('Player and inventory live editor tuning affects real gameplay state', () => {
+  const bus = new EventBus();
+  const inventory = new Inventory(bus, { experience: 1000 });
+  const player = createPlayerMock();
+  player.tuning = { maxHealthBonus: 75 };
+  const progression = new PlayerProgressionSystem(player, inventory, bus);
+  const combat = new CombatSystem(
+    new THREE.OrthographicCamera(),
+    player,
+    { getRayTarget() { return null; } },
+    inventory,
+    bus,
+    silentAudio,
+    6
+  );
+
+  combat.setProgressionSystem(progression);
+  combat.applyTuning({ damageMultiplier: 2, fireRateMultiplier: 1.5, rangeBonus: 6 });
+  inventory.replace({ ...inventory.snapshot(), wood: 99, stone: 77 }, 'live-editor');
+  progression.update();
+
+  assert.equal(inventory.get('wood'), 99);
+  assert.equal(inventory.get('stone'), 77);
+  assert.equal(player.maxHealth, 187);
+  assert.equal(combat.getSnapshot().damage, GAMEPLAY.weapon.damage * 2);
+  assert.ok(combat.getRange() >= GAMEPLAY.weapon.range + 6);
   assert.ok(combat.getFireInterval() < GAMEPLAY.weapon.fireInterval);
   combat.dispose();
 });

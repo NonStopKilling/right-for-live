@@ -790,9 +790,15 @@ button {
 
 .overlay-keybinds,
 .overlay-attributes,
-.overlay-quests {
+.overlay-quests,
+.overlay-tuning,
+.overlay-resource-editor {
   display: grid;
   gap: 6px;
+}
+
+.overlay-resource-editor {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
 .overlay-market {
@@ -1008,6 +1014,43 @@ button {
 .overlay-attribute button:disabled {
   cursor: not-allowed;
   opacity: 0.35;
+}
+
+.overlay-live-control,
+.overlay-resource-control {
+  display: grid;
+  gap: 5px;
+  padding: 7px 8px;
+  border-left: 2px solid rgba(228, 216, 112, 0.26);
+  background: rgba(18, 19, 14, 0.78);
+}
+
+.overlay-live-control {
+  grid-template-columns: minmax(92px, 0.65fr) minmax(100px, 1fr) 48px;
+  align-items: center;
+}
+
+.overlay-resource-control {
+  grid-template-columns: minmax(72px, 1fr) 74px;
+  align-items: center;
+}
+
+.overlay-live-control span,
+.overlay-resource-control span {
+  color: #d1d0ae;
+  font-size: 8px;
+  font-weight: 800;
+}
+
+.overlay-live-control output {
+  color: #8fd5b9;
+  font-size: 8px;
+  font-weight: 900;
+  text-align: right;
+}
+
+.overlay-resource-control input {
+  width: 100%;
 }
 
 .overlay-meter {

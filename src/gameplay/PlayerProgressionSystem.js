@@ -45,7 +45,7 @@ export class PlayerProgressionSystem {
   }
 
   apply() {
-    const nextMaxHealth = 100 + this.snapshot.bonuses.maxHealth;
+    const nextMaxHealth = 100 + (this.player.tuning?.maxHealthBonus ?? 0) + this.snapshot.bonuses.maxHealth;
     const previousMaxHealth = this.player.maxHealth;
     this.player.maxHealth = nextMaxHealth;
 

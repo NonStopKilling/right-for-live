@@ -25,6 +25,7 @@ export class InputManager {
     this.buildToggleRequested = false;
     this.craftPotionRequested = false;
     this.usePotionRequested = false;
+    this.interactRequested = false;
     this.cancelRequested = false;
     this.muteToggleRequested = false;
     this.primaryActionRequested = false;
@@ -73,6 +74,10 @@ export class InputManager {
 
   isInteractHeld() {
     return this.keys.has(this.keybinds.interact);
+  }
+
+  consumeInteract() {
+    return this.consumeFlag('interactRequested');
   }
 
   consumeReload() {
@@ -131,6 +136,8 @@ export class InputManager {
 
     if (event.code === this.keybinds.reload) {
       this.reloadRequested = true;
+    } else if (event.code === this.keybinds.interact) {
+      this.interactRequested = true;
     } else if (event.code === this.keybinds.build) {
       this.buildToggleRequested = true;
     } else if (event.code === this.keybinds.craftPotion) {

@@ -8,7 +8,7 @@ const COLOR = new THREE.Color();
 const POSITION = new THREE.Vector3();
 const SCALE = new THREE.Vector3();
 const Y_AXIS = new THREE.Vector3(0, 1, 0);
-const CITY_LIMIT = 52;
+const CITY_LIMIT = 108;
 const BLOCK_SIZE = 28;
 const ROAD_HALF_WIDTH = 3;
 const LOT_OFFSET = 7;
@@ -220,11 +220,24 @@ export class CitySystem {
       Math.abs(gx) > 12 &&
       Math.abs(gz) > 12 &&
       hash2D(gx, gz, this.seed(4011)) > 0.988 &&
-      !this.isRoad(gx, gz);
+      !this.isRoad(gx, gz) &&
+      !this.hasNearbyLotAnchor(gx, gz, 8);
+  }
+
+  hasNearbyLotAnchor(gx, gz, radius) {
+    for (let z = gz - radius; z <= gz + radius; z += 1) {
+      for (let x = gx - radius; x <= gx + radius; x += 1) {
+        if (this.isLotAnchor(x, z)) {
+          return true;
+        }
+      }
+    }
+
+    return false;
   }
 
   shouldPlaceVehicle(cell) {
-    if (!this.isInsideCity(cell.gx, cell.gz)) {
+    if (!this.isInsideCity(cell.gx, cell.gz) || this.isGateCorridor(cell.gx, cell.gz)) {
       return false;
     }
 
@@ -253,7 +266,7 @@ export class CitySystem {
 
   shouldPlaceResourceCrate(cell) {
     const density = Math.max(0, Number(this.options.cityResourceDensity) / 100);
-    return density > 0 && this.isRoad(cell.gx, cell.gz) && hash2D(cell.gx, cell.gz, this.seed(4301)) > 1 - 0.008 * density;
+    return density > 0 && this.isRoad(cell.gx, cell.gz) && !this.isGateCorridor(cell.gx, cell.gz) && hash2D(cell.gx, cell.gz, this.seed(4301)) > 1 - 0.008 * density;
   }
 
   shouldPlaceParkResource(cell) {
@@ -276,8 +289,13 @@ export class CitySystem {
 
   shouldPlaceCityWall(cell) {
     const atWall = Math.abs(Math.abs(cell.gx) - CITY_LIMIT) <= 1 || Math.abs(Math.abs(cell.gz) - CITY_LIMIT) <= 1;
-    const roadGate = this.isRoad(cell.gx, cell.gz) && (Math.abs(cell.gx) > CITY_LIMIT - 3 || Math.abs(cell.gz) > CITY_LIMIT - 3);
+    const roadGate = this.isGateCorridor(cell.gx, cell.gz);
     return atWall && !roadGate;
+  }
+
+  isGateCorridor(gx, gz) {
+    const nearWall = Math.abs(gx) > CITY_LIMIT - 5 || Math.abs(gz) > CITY_LIMIT - 5;
+    return nearWall && (Math.abs(gx) <= ROAD_HALF_WIDTH + 2 || Math.abs(gz) <= ROAD_HALF_WIDTH + 2);
   }
 
   getResourceId(cell) {
@@ -290,25 +308,38 @@ export class CitySystem {
     const rot = this.resolveLotRotation(cell.gx, cell.gz);
     const houseColor = this.resolveHouseColor(cell);
     const roofColor = this.resolveRoofColor(cell);
-    const width = 3.8 + hash2D(cell.gx, cell.gz, this.seed(4027)) * 0.75;
-    const depth = 3.1 + hash2D(cell.gz, cell.gx, this.seed(4033)) * 0.7;
-    const height = 1.55 + hash2D(cell.gx, -cell.gz, this.seed(4039)) * 0.42;
+    const { width, depth, height } = this.resolveHouseDimensions(cell.gx, cell.gz);
     const front = directionFromRotation(rot);
     const side = { x: front.z, z: -front.x };
 
     parts.house.push(block(x, baseY + height / 2, z, width, height, depth, houseColor, rot));
-    parts.roof.push(block(x, baseY + height + 0.22, z, width + 0.42, 0.42, depth + 0.42, roofColor, rot));
-    parts.roof.push(block(x, baseY + height + 0.55, z, width * 0.58, 0.24, depth + 0.7, shade(roofColor, cell.gz, cell.gx), rot));
-    parts.door.push(block(x + front.x * (depth / 2 + 0.035), baseY + 0.42, z + front.z * (depth / 2 + 0.035), 0.42, 0.72, 0.07, 0x4b3425, rot));
-    parts.window.push(block(x + side.x * 1.05 + front.x * (depth / 2 + 0.04), baseY + 0.88, z + side.z * 1.05 + front.z * (depth / 2 + 0.04), 0.44, 0.34, 0.06, 0x8fc4b8, rot));
-    parts.window.push(block(x - side.x * 1.05 + front.x * (depth / 2 + 0.04), baseY + 0.88, z - side.z * 1.05 + front.z * (depth / 2 + 0.04), 0.44, 0.34, 0.06, 0x8fc4b8, rot));
-    parts.prop.push(block(x + front.x * 2.2, baseY + 0.06, z + front.z * 2.2, 1.1, 0.12, 0.9, 0x6f6a5d, rot));
+    parts.roof.push(block(x, baseY + height + 0.25, z, width + 0.62, 0.5, depth + 0.62, roofColor, rot));
+    parts.roof.push(block(x, baseY + height + 0.64, z, width * 0.62, 0.28, depth + 0.86, shade(roofColor, cell.gz, cell.gx), rot));
+    parts.door.push(block(x + front.x * (depth / 2 + 0.04), baseY + 0.5, z + front.z * (depth / 2 + 0.04), 0.52, 0.9, 0.08, 0x4b3425, rot));
+    parts.window.push(block(x + side.x * 1.25 + front.x * (depth / 2 + 0.05), baseY + 1.08, z + side.z * 1.25 + front.z * (depth / 2 + 0.05), 0.52, 0.4, 0.065, 0x8fc4b8, rot));
+    parts.window.push(block(x - side.x * 1.25 + front.x * (depth / 2 + 0.05), baseY + 1.08, z - side.z * 1.25 + front.z * (depth / 2 + 0.05), 0.52, 0.4, 0.065, 0x8fc4b8, rot));
+    parts.prop.push(block(x + front.x * 2.55, baseY + 0.06, z + front.z * 2.55, 1.35, 0.12, 1.0, 0x6f6a5d, rot));
 
     this.addFenceRing(x, z, baseY, 7.8, 6.9, parts.fence);
     this.addYardTree(x - side.x * 2.6 - front.x * 1.35, z - side.z * 2.6 - front.z * 1.35, baseY, parts.prop, parts.fence, cell);
 
     if (hash2D(cell.gx, cell.gz, this.seed(4047)) > 0.62) {
-      parts.prop.push(block(x - side.x * 1.35 - front.x * 0.8, baseY + height + 0.62, z - side.z * 1.35 - front.z * 0.8, 0.38, 0.78, 0.38, 0x40382f));
+      parts.prop.push(block(x - side.x * 1.55 - front.x * 0.9, baseY + height + 0.72, z - side.z * 1.55 - front.z * 0.9, 0.42, 0.88, 0.42, 0x40382f));
+    }
+
+    if (this.hasRoofRamp({ gx: cell.gx, gz: cell.gz })) {
+      for (let step = 0; step < 5; step += 1) {
+        parts.prop.push(block(
+          x + front.x * (2.48 - step * 0.48),
+          baseY + 0.14 + step * 0.19,
+          z + front.z * (2.48 - step * 0.48),
+          0.82,
+          0.16 + step * 0.08,
+          0.52,
+          shade(0x6f5136, cell.gx + step, cell.gz),
+          rot
+        ));
+      }
     }
   }
 
@@ -412,22 +443,30 @@ export class CitySystem {
     const color = palette[Math.floor(hash2D(cell.gz, cell.gx, this.seed(4117)) * palette.length)];
     const rotation = Math.abs(cell.gx % BLOCK_SIZE) <= 1 ? Math.PI / 2 : 0;
     const baseY = cell.level * WORLD.blockHeight;
-    const length = [1.9, 1.62, 2.3][variant];
-    const width = [0.88, 0.98, 0.98][variant];
-    const bodyHeight = [0.42, 0.48, 0.5][variant];
-    const cabinOffset = variant === 2 ? -0.28 : 0.08;
+    const length = [2.75, 2.45, 3.15][variant];
+    const width = [1.22, 1.32, 1.3][variant];
+    const bodyHeight = [0.5, 0.55, 0.58][variant];
+    const cabinLength = [1.05, 0.92, 0.98][variant];
+    const cabinOffset = variant === 2 ? -0.42 : 0.18;
     const addPart = (offsetX, offsetZ, y, scaleX, scaleY, scaleZ, partColor) => {
       const [partX, partZ] = offsetBlock(x, z, offsetX, offsetZ, rotation);
       parts.vehicle.push(block(partX, y, partZ, scaleX, scaleY, scaleZ, partColor, rotation));
     };
 
-    addPart(0, 0, baseY + bodyHeight / 2 + 0.08, length, bodyHeight, width, color);
-    addPart(0, cabinOffset, baseY + bodyHeight + 0.32, length * 0.44, 0.42, width * 0.78, shade(color, cell.gz, cell.gx));
-    addPart(length * 0.1, cabinOffset + width * 0.41, baseY + bodyHeight + 0.36, length * 0.28, 0.23, 0.055, 0x8fc4b8);
-    addPart(length * -0.42, -width * 0.52, baseY + 0.18, 0.28, 0.28, 0.18, 0x171713);
-    addPart(length * 0.42, -width * 0.52, baseY + 0.18, 0.28, 0.28, 0.18, 0x171713);
-    addPart(length * -0.42, width * 0.52, baseY + 0.18, 0.28, 0.28, 0.18, 0x171713);
-    addPart(length * 0.42, width * 0.52, baseY + 0.18, 0.28, 0.28, 0.18, 0x171713);
+    addPart(0, 0, baseY + bodyHeight / 2 + 0.12, length, bodyHeight, width, color);
+    addPart(-length * 0.36, 0, baseY + bodyHeight + 0.18, 0.5, 0.18, width * 0.92, shade(color, cell.gx, cell.gz));
+    addPart(length * 0.32, 0, baseY + bodyHeight + 0.16, 0.62, 0.14, width * 0.88, shade(color, cell.gz, cell.gx));
+    addPart(0, cabinOffset, baseY + bodyHeight + 0.42, cabinLength, 0.52, width * 0.72, shade(color, cell.gz, cell.gx));
+    addPart(cabinLength * 0.18, cabinOffset + width * 0.38, baseY + bodyHeight + 0.47, cabinLength * 0.5, 0.28, 0.06, 0x9fd1c5);
+    addPart(cabinLength * 0.18, cabinOffset - width * 0.38, baseY + bodyHeight + 0.47, cabinLength * 0.5, 0.28, 0.06, 0x7ea99f);
+    addPart(length * 0.52, width * 0.34, baseY + 0.43, 0.12, 0.12, 0.13, 0xf0d66f);
+    addPart(length * 0.52, -width * 0.34, baseY + 0.43, 0.12, 0.12, 0.13, 0xf0d66f);
+    addPart(-length * 0.48, width * 0.35, baseY + 0.4, 0.11, 0.11, 0.12, 0x7b1f1f);
+    addPart(-length * 0.48, -width * 0.35, baseY + 0.4, 0.11, 0.11, 0.12, 0x7b1f1f);
+    addPart(length * -0.37, -width * 0.56, baseY + 0.22, 0.36, 0.36, 0.22, 0x151511);
+    addPart(length * 0.37, -width * 0.56, baseY + 0.22, 0.36, 0.36, 0.22, 0x151511);
+    addPart(length * -0.37, width * 0.56, baseY + 0.22, 0.36, 0.36, 0.22, 0x151511);
+    addPart(length * 0.37, width * 0.56, baseY + 0.22, 0.36, 0.36, 0.22, 0x151511);
   }
 
   addLamp(cell, parts) {
@@ -507,12 +546,20 @@ export class CitySystem {
 
     const { gx, gz } = this.terrain.worldToGrid(x, z);
 
+    if (this.isGateCorridor(gx, gz)) {
+      return false;
+    }
+
+    if (this.getWalkSurfaceAtWorld(x, z)) {
+      return false;
+    }
+
     if (this.shouldPlaceCityWall({ gx, gz })) {
       return true;
     }
 
-    for (let dz = -1; dz <= 1; dz += 1) {
-      for (let dx = -1; dx <= 1; dx += 1) {
+    for (let dz = -2; dz <= 2; dz += 1) {
+      for (let dx = -2; dx <= 2; dx += 1) {
         if (this.shouldPlaceVehicle({ gx: gx + dx, gz: gz + dz })) {
           return true;
         }
@@ -537,6 +584,58 @@ export class CitySystem {
     return false;
   }
 
+  getWalkSurfaceAtWorld(x, z) {
+    if (!this.isCityMap()) {
+      return null;
+    }
+
+    const { gx, gz } = this.terrain.worldToGrid(x, z);
+    const access = this.resolveRoofAccess(gx, gz);
+
+    if (!access) {
+      return null;
+    }
+
+    const base = this.terrain.getHeightAtGrid(access.anchor.gx, access.anchor.gz);
+
+    if (access.kind === 'roof') {
+      return { y: base + this.resolveHouseDimensions(access.anchor.gx, access.anchor.gz).height + 0.72, kind: 'roof' };
+    }
+
+    return { y: base + 0.22 + access.progress * (this.resolveHouseDimensions(access.anchor.gx, access.anchor.gz).height + 0.42), kind: 'ramp' };
+  }
+
+  findNearestVehicleWorld(position, range = 1.8) {
+    if (!this.isCityMap()) {
+      return null;
+    }
+
+    const { gx, gz } = this.terrain.worldToGrid(position.x, position.z);
+    const radius = Math.ceil(range / WORLD.cellSize) + 1;
+    let nearest = null;
+    let nearestDistance = range;
+
+    for (let z = gz - radius; z <= gz + radius; z += 1) {
+      for (let x = gx - radius; x <= gx + radius; x += 1) {
+        const cell = this.terrain.getCell(x, z);
+
+        if (!this.shouldPlaceVehicle(cell)) {
+          continue;
+        }
+
+        const world = this.terrain.gridToWorld(x, z);
+        const distance = Math.hypot(world.x - position.x, world.z - position.z);
+
+        if (distance <= nearestDistance) {
+          nearest = { ...world, gx: x, gz: z, distance };
+          nearestDistance = distance;
+        }
+      }
+    }
+
+    return nearest;
+  }
+
   getBuildSurfaceAtWorld(x, z) {
     if (!this.isCityMap()) {
       return null;
@@ -559,7 +658,7 @@ export class CitySystem {
 
         if (anchor) {
           const base = this.terrain.getHeightAtGrid(anchor.gx, anchor.gz);
-          return { y: base + 1.9, kind: 'roof' };
+          return { y: base + this.resolveHouseDimensions(anchor.gx, anchor.gz).height + 0.72, kind: 'roof' };
         }
       }
     }
@@ -593,7 +692,54 @@ export class CitySystem {
   isInsideHouse(gx, gz, anchor) {
     const dx = Math.abs(gx - anchor.gx);
     const dz = Math.abs(gz - anchor.gz);
-    return dx <= 2 && dz <= 2;
+    return dx <= 3 && dz <= 3;
+  }
+
+  resolveRoofAccess(gx, gz) {
+    for (let blockZ = Math.floor((gz - BLOCK_SIZE) / BLOCK_SIZE); blockZ <= Math.floor((gz + BLOCK_SIZE) / BLOCK_SIZE); blockZ += 1) {
+      for (let blockX = Math.floor((gx - BLOCK_SIZE) / BLOCK_SIZE); blockX <= Math.floor((gx + BLOCK_SIZE) / BLOCK_SIZE); blockX += 1) {
+        const anchors = [
+          { gx: blockX * BLOCK_SIZE + LOT_OFFSET, gz: blockZ * BLOCK_SIZE + LOT_OFFSET },
+          { gx: blockX * BLOCK_SIZE - LOT_OFFSET, gz: blockZ * BLOCK_SIZE + LOT_OFFSET },
+          { gx: blockX * BLOCK_SIZE + LOT_OFFSET, gz: blockZ * BLOCK_SIZE - LOT_OFFSET },
+          { gx: blockX * BLOCK_SIZE - LOT_OFFSET, gz: blockZ * BLOCK_SIZE - LOT_OFFSET }
+        ];
+
+        for (const anchor of anchors) {
+          if (!this.isLotAnchor(anchor.gx, anchor.gz) || !this.hasRoofRamp(anchor)) {
+            continue;
+          }
+
+          if (this.isInsideHouse(gx, gz, anchor)) {
+            return { anchor, kind: 'roof', progress: 1 };
+          }
+
+          const front = directionFromRotation(this.resolveLotRotation(anchor.gx, anchor.gz));
+          const dx = gx - anchor.gx;
+          const dz = gz - anchor.gz;
+          const along = dx * front.x + dz * front.z;
+          const cross = Math.abs(dx * front.z - dz * front.x);
+
+          if (along >= 2 && along <= 5 && cross <= 1) {
+            return { anchor, kind: 'ramp', progress: Math.max(0, Math.min(1, (5 - along) / 3)) };
+          }
+        }
+      }
+    }
+
+    return null;
+  }
+
+  hasRoofRamp(anchor) {
+    return hash2D(anchor.gx, anchor.gz, this.seed(4073)) > 0.68;
+  }
+
+  resolveHouseDimensions(gx, gz) {
+    return {
+      width: 4.45 + hash2D(gx, gz, this.seed(4027)) * 0.95,
+      depth: 3.75 + hash2D(gz, gx, this.seed(4033)) * 0.85,
+      height: 1.85 + hash2D(gx, -gz, this.seed(4039)) * 0.48
+    };
   }
 
   resolveLotRotation(gx, gz) {

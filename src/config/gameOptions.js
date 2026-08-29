@@ -47,6 +47,8 @@ export const DEFAULT_LAB_OPTIONS = Object.freeze({
 export const DEFAULT_GAME_OPTIONS = Object.freeze({
   uiScale: 'auto',
   graphics: 'balanced',
+  cameraView: 'normal',
+  cameraZoomRange: 130,
   masterVolume: 45,
   chatOpacity: 88,
   microphoneMode: 'push',
@@ -59,6 +61,13 @@ export const DEFAULT_GAME_OPTIONS = Object.freeze({
   highContrastHud: false,
   keybinds: DEFAULT_KEYBINDS,
   attributes: { vigor: 1, precision: 1, engineering: 1, endurance: 1 },
+  playerTuning: {
+    moveSpeed: 100,
+    maxHealthBonus: 0,
+    damageMultiplier: 100,
+    fireRateMultiplier: 100,
+    rangeBonus: 0
+  },
   lab: DEFAULT_LAB_OPTIONS
 });
 

@@ -9,9 +9,27 @@ export class CameraController {
     this.offset = new THREE.Vector3(CAMERA.offset.x, CAMERA.offset.y, CAMERA.offset.z);
     this.zoom = 1;
     this.aspect = 1;
+    this.zoomRange = 1.3;
 
     this.camera.position.copy(this.offset);
     this.camera.lookAt(this.target);
+  }
+
+  applyOptions(options = {}) {
+    const view = options.cameraView ?? 'normal';
+    const range = Math.max(0.9, Math.min(1.8, Number(options.cameraZoomRange ?? 130) / 100));
+    this.zoomRange = range;
+
+    if (view === 'wide') {
+      this.offset.set(16.4, 13.4, 16.4);
+    } else if (view === 'close') {
+      this.offset.set(9.8, 8.2, 9.8);
+    } else {
+      this.offset.set(CAMERA.offset.x, CAMERA.offset.y, CAMERA.offset.z);
+    }
+
+    this.zoom = clamp(this.zoom, CAMERA.minZoom / range, CAMERA.maxZoom * range);
+    this.applyProjection();
   }
 
   resize(width, height) {
@@ -25,7 +43,7 @@ export class CameraController {
     }
 
     const zoomFactor = delta > 0 ? 0.9 : 1.1;
-    this.zoom = clamp(this.zoom * zoomFactor, CAMERA.minZoom, CAMERA.maxZoom);
+    this.zoom = clamp(this.zoom * zoomFactor, CAMERA.minZoom / this.zoomRange, CAMERA.maxZoom * this.zoomRange);
     this.applyProjection();
   }
 

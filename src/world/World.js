@@ -48,7 +48,7 @@ export class World {
   }
 
   getHeightAtWorld(x, z) {
-    return this.terrain.getHeightAtWorld(x, z);
+    return this.city.getWalkSurfaceAtWorld(x, z)?.y ?? this.terrain.getHeightAtWorld(x, z);
   }
 
   isWalkableWorld(x, z) {
@@ -61,6 +61,10 @@ export class World {
 
   isCityWorld(x, z) {
     return this.city.isCityCoreWorld(x, z);
+  }
+
+  findNearestVehicle(position, range) {
+    return this.city.findNearestVehicleWorld(position, range);
   }
 
   findNearestResource(position, range) {
@@ -155,6 +159,9 @@ export class World {
 
   createChunk(chunkX, chunkZ, key = this.chunkKey(chunkX, chunkZ)) {
     const cells = this.terrain.generateChunkCells(chunkX, chunkZ);
+    const outsideCityCells = this.options.mapMode === 'city'
+      ? cells.filter((cell) => !this.city.isInsideCity(cell.gx, cell.gz))
+      : cells;
     const group = new THREE.Group();
     group.name = `WorldChunk-${key}`;
     const layers = {
@@ -162,10 +169,10 @@ export class World {
       water: this.water.createChunkGroup(cells, key),
       city: this.city.createChunkGroup(cells, key, this.depletedResources),
       vegetation: this.options.mapMode === 'city'
-        ? new THREE.Group()
+        ? this.trees.createChunkGroup(outsideCityCells, key, this.depletedResources)
         : this.trees.createChunkGroup(cells, key, this.depletedResources),
       props: this.options.mapMode === 'city'
-        ? new THREE.Group()
+        ? this.props.createChunkGroup(outsideCityCells, key, this.depletedResources)
         : this.props.createChunkGroup(cells, key, this.depletedResources),
       debug: this.createChunkBorder(chunkX, chunkZ)
     };
@@ -173,7 +180,8 @@ export class World {
     layers.props.name = layers.props.name || `PropsChunk-${key}`;
     const resources = [
       ...(this.options.mapMode === 'city' ? [] : this.trees.getResourceNodes(cells)),
-      ...(this.options.mapMode === 'city' ? [] : this.props.getResourceNodes(cells)),
+      ...(this.options.mapMode === 'city' ? this.trees.getResourceNodes(outsideCityCells) : []),
+      ...(this.options.mapMode === 'city' ? this.props.getResourceNodes(outsideCityCells) : []),
       ...this.city.getResourceNodes(cells)
     ].map((resource) => ({ ...resource, chunkKey: key }));
     group.add(layers.terrain, layers.water, layers.city, layers.vegetation, layers.props, layers.debug);
@@ -192,14 +200,17 @@ export class World {
     chunk.group.remove(previous);
     previous.clear();
 
+    const outsideCityCells = this.options.mapMode === 'city'
+      ? chunk.cells.filter((cell) => !this.city.isInsideCity(cell.gx, cell.gz))
+      : chunk.cells;
     const next = layerName === 'vegetation'
       ? this.options.mapMode === 'city'
-        ? new THREE.Group()
+        ? this.trees.createChunkGroup(outsideCityCells, this.chunkKey(chunk.chunkX, chunk.chunkZ), this.depletedResources)
         : this.trees.createChunkGroup(chunk.cells, this.chunkKey(chunk.chunkX, chunk.chunkZ), this.depletedResources)
       : layerName === 'city'
         ? this.city.createChunkGroup(chunk.cells, this.chunkKey(chunk.chunkX, chunk.chunkZ), this.depletedResources)
         : this.options.mapMode === 'city'
-          ? new THREE.Group()
+          ? this.props.createChunkGroup(outsideCityCells, this.chunkKey(chunk.chunkX, chunk.chunkZ), this.depletedResources)
           : this.props.createChunkGroup(chunk.cells, this.chunkKey(chunk.chunkX, chunk.chunkZ), this.depletedResources);
     chunk.layers[layerName] = next;
     chunk.group.add(next);

@@ -126,12 +126,44 @@ export class ZombieSystem {
     let spawned = 0;
 
     for (let index = 0; index < count; index += 1) {
-      spawned += Number(this.trySpawn(true));
+      spawned += Number(this.trySpawnCityHorde(index));
     }
 
     this.cityHordeTimer = 72;
     this.cityHordeWarningIssued = false;
     this.eventBus.emit('city:horde-started', { count: spawned });
+  }
+
+  trySpawnCityHorde(offset = 0) {
+    const maxActive = Math.max(0, Math.round(GAMEPLAY.zombie.maxActive * Number(this.options.zombieMaxActive) / 100));
+
+    if (this.zombies.length >= maxActive || this.player.isDead) {
+      return false;
+    }
+
+    const serial = this.spawnSerial++;
+    const gates = [
+      { x: 0, z: -38, spreadX: 12, spreadZ: 4 },
+      { x: 0, z: 38, spreadX: 12, spreadZ: 4 },
+      { x: -38, z: 0, spreadX: 4, spreadZ: 12 },
+      { x: 38, z: 0, spreadX: 4, spreadZ: 12 }
+    ];
+    const gate = gates[Math.floor(hash2D(serial + offset, 59, WORLD.seed + 1451) * gates.length)];
+    const x = this.player.position.x + gate.x + (hash2D(serial, 61, WORLD.seed + 1457) - 0.5) * gate.spreadX;
+    const z = this.player.position.z + gate.z + (hash2D(serial, 67, WORLD.seed + 1463) - 0.5) * gate.spreadZ;
+
+    if (!this.world.isWalkableWorld(x, z) || this.towerSystem?.isInsideSafeZone(x, z)) {
+      return false;
+    }
+
+    const tier = Math.max(1, Math.floor(Math.hypot(x, z) / GAMEPLAY.zombie.threatTierDistance));
+    const spawnPoint = new THREE.Vector3(x, this.world.getHeightAtWorld(x, z), z);
+    const zombie = new Zombie(`z${serial}`, spawnPoint, this.createStats(tier), this.getAssets(tier));
+    zombie.group.name = `CityHordeZombie-${zombie.id}`;
+    this.zombies.push(zombie);
+    this.group.add(zombie.group);
+    this.eventBus.emit('zombie:spawned', { id: zombie.id, tier, cityHorde: true });
+    return true;
   }
 
   trySpawn(forceCityHorde = false) {

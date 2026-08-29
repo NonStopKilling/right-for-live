@@ -17,6 +17,7 @@ export class Player {
     this.walkTime = 0;
     this.maxHealth = GAMEPLAY.player.maxHealth;
     this.health = this.maxHealth;
+    this.tuning = { moveSpeed: 1, maxHealthBonus: 0 };
     this.damageFlash = 0;
     this.isDead = false;
 
@@ -96,14 +97,14 @@ export class Player {
     );
   }
 
-  update(deltaTime, input, world, canMove = true) {
+  update(deltaTime, input, world, canMove = true, speedMultiplier = 1) {
     const movement = input.getMovement();
     MOVE.set(0, 0, 0)
       .addScaledVector(SCREEN_RIGHT, movement.x)
       .addScaledVector(SCREEN_FORWARD, movement.y);
 
     if (canMove && !this.isDead && MOVE.lengthSq() > 0) {
-      MOVE.normalize().multiplyScalar(PLAYER.speed * deltaTime);
+      MOVE.normalize().multiplyScalar(PLAYER.speed * this.tuning.moveSpeed * speedMultiplier * deltaTime);
 
       const nextX = this.position.x + MOVE.x;
       const nextZ = this.position.z + MOVE.z;
@@ -171,6 +172,24 @@ export class Player {
     return this.health - previous;
   }
 
+  applyTuning(tuning = {}) {
+    const nextMoveSpeed = clampNumber(tuning.moveSpeed, 0.45, 3.5, 1);
+    const nextMaxHealthBonus = clampNumber(tuning.maxHealthBonus, 0, 500, 0);
+    const previousMaxHealth = this.maxHealth;
+
+    this.tuning = {
+      moveSpeed: nextMoveSpeed,
+      maxHealthBonus: nextMaxHealthBonus
+    };
+    this.maxHealth = GAMEPLAY.player.maxHealth + nextMaxHealthBonus;
+
+    if (this.maxHealth > previousMaxHealth) {
+      this.health += this.maxHealth - previousMaxHealth;
+    }
+
+    this.health = Math.min(this.health, this.maxHealth);
+  }
+
   respawn(position) {
     this.position.copy(position);
     this.position.y += 0.025;
@@ -212,4 +231,9 @@ export class Player {
     materials.forEach((material) => material.dispose());
     this.group.clear();
   }
+}
+
+function clampNumber(value, min, max, fallback) {
+  const numeric = Number(value);
+  return Number.isFinite(numeric) ? Math.max(min, Math.min(max, numeric)) : fallback;
 }

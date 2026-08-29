@@ -38,9 +38,28 @@ const ATTRIBUTE_LABELS = Object.freeze({
   endurance: 'Resistencia'
 });
 
+const PLAYER_TUNING_LABELS = Object.freeze({
+  moveSpeed: ['Velocidad caminar', 45, 350, 1, '%'],
+  maxHealthBonus: ['Vida extra', 0, 500, 1, ' HP'],
+  damageMultiplier: ['Dano arma', 25, 600, 1, '%'],
+  fireRateMultiplier: ['Cadencia arma', 25, 500, 1, '%'],
+  rangeBonus: ['Alcance extra', 0, 35, 0.5, ' m']
+});
+
+const RESOURCE_EDITOR_LABELS = Object.freeze({
+  wood: 'Madera',
+  stone: 'Piedra',
+  artifact: 'Obj extranos',
+  ammoReserve: 'Balas reserva',
+  healingPotion: 'Pociones',
+  experience: 'XP'
+});
+
 const DEFAULT_OPTIONS = Object.freeze({
   uiScale: 'auto',
   graphics: 'balanced',
+  cameraView: 'normal',
+  cameraZoomRange: 130,
   masterVolume: 45,
   chatOpacity: 88,
   microphoneMode: 'push',
@@ -53,6 +72,13 @@ const DEFAULT_OPTIONS = Object.freeze({
   highContrastHud: false,
   keybinds: DEFAULT_KEYBINDS,
   attributes: { vigor: 1, precision: 1, engineering: 1, endurance: 1 },
+  playerTuning: {
+    moveSpeed: 100,
+    maxHealthBonus: 0,
+    damageMultiplier: 100,
+    fireRateMultiplier: 100,
+    rangeBonus: 0
+  },
   lab: DEFAULT_LAB_OPTIONS
 });
 
@@ -139,6 +165,16 @@ export class GameOverlay {
                 <option value="balanced">Balanceado</option>
                 <option value="cinematic">Cinematico</option>
               </select>
+            </label>
+            <label>Vista camara
+              <select data-option="cameraView">
+                <option value="normal">Normal</option>
+                <option value="wide">Lejana</option>
+                <option value="close">Cercana</option>
+              </select>
+            </label>
+            <label>Rango zoom
+              <input type="range" min="90" max="180" step="1" data-option="cameraZoomRange">
             </label>
             <label class="overlay-toggle"><input type="checkbox" data-option="showTowerPanel"> Panel de torres</label>
             <label class="overlay-toggle"><input type="checkbox" data-option="showObjective"> Objetivo visible</label>
@@ -258,6 +294,14 @@ export class GameOverlay {
 
           <section class="overlay-panel" data-panel="attributes">
             <div class="overlay-attributes" data-overlay="attributes"></div>
+            <fieldset class="overlay-lab-group">
+              <legend>Editor vivo del personaje</legend>
+              <div class="overlay-tuning" data-overlay="player-tuning"></div>
+            </fieldset>
+            <fieldset class="overlay-lab-group">
+              <legend>Materiales y recursos</legend>
+              <div class="overlay-resource-editor" data-overlay="resource-editor"></div>
+            </fieldset>
           </section>
         </div>
       </section>
@@ -368,6 +412,24 @@ export class GameOverlay {
 
     const option = event.target.dataset.option;
 
+    const playerTuning = event.target.dataset.playerTuning;
+
+    if (playerTuning) {
+      this.options.playerTuning[playerTuning] = Number(event.target.value);
+      this.saveOptions();
+      this.actions.updatePlayerTuning?.(this.options.playerTuning);
+      this.updateEditorOutputs();
+      return;
+    }
+
+    const inventoryEditor = event.target.dataset.inventoryEditor;
+
+    if (inventoryEditor) {
+      this.actions.updateInventoryValue?.(inventoryEditor, Number(event.target.value));
+      this.updateEditorOutputs();
+      return;
+    }
+
     if (!option) {
       return;
     }
@@ -379,6 +441,8 @@ export class GameOverlay {
 
     if (option === 'masterVolume') {
       this.actions.setAudioVolume?.(Number(element.value) / 100);
+    } else if (option === 'cameraView' || option === 'cameraZoomRange') {
+      this.actions.applyGameOptions?.(this.options, { rebuild: false });
     }
   }
 
@@ -459,6 +523,8 @@ export class GameOverlay {
     this.renderLabFields();
     this.renderProfile();
     this.renderAttributes();
+    this.renderPlayerTuningFields();
+    this.renderInventoryEditorFields();
     this.renderQuests();
     this.renderMarket();
     this.renderChat();
@@ -529,11 +595,12 @@ export class GameOverlay {
 
   renderAttributes() {
     const xp = this.state?.inventory?.experience ?? 0;
-    const playerLevel = Math.max(1, Math.floor(xp / 30) + 1);
+    const playerLevel = this.state?.progression?.level ?? Math.max(1, Math.floor(xp / 1000) + 1);
     const used = Object.values(this.options.attributes).reduce((sum, value) => sum + Number(value), 0);
     const points = Math.max(0, playerLevel + 3 - used);
     const health = this.state?.player?.maxHealth ?? 100;
-    const signature = JSON.stringify({ xp, playerLevel, points, health, attributes: this.options.attributes });
+    const weapon = this.state?.weapon ?? {};
+    const signature = JSON.stringify({ xp, playerLevel, points, health, weapon, attributes: this.options.attributes });
 
     if (signature === this.attributeSignature) {
       return;
@@ -545,7 +612,10 @@ export class GameOverlay {
       createMetric('Nivel', String(playerLevel)),
       createMetric('XP', String(xp)),
       createMetric('Puntos', String(points)),
-      createMetric('Vida base', String(health)),
+      createMetric('Vida max', String(health)),
+      createMetric('Dano', String(weapon.damage ?? '-')),
+      createMetric('Cadencia', weapon.fireInterval ? `${weapon.fireInterval.toFixed(2)}s` : '-'),
+      createMetric('Alcance', weapon.range ? `${weapon.range.toFixed(1)}m` : '-'),
       ...Object.entries(ATTRIBUTE_LABELS).map(([key, label]) => {
         const row = document.createElement('div');
         row.className = 'overlay-attribute';
@@ -560,6 +630,8 @@ export class GameOverlay {
         return row;
       })
     );
+    this.renderPlayerTuningFields();
+    this.renderInventoryEditorFields();
   }
 
   renderQuests() {
@@ -684,7 +756,7 @@ export class GameOverlay {
 
   updateAttribute(attribute, delta) {
     const xp = this.state?.inventory?.experience ?? 0;
-    const playerLevel = Math.max(1, Math.floor(xp / 30) + 1);
+    const playerLevel = this.state?.progression?.level ?? Math.max(1, Math.floor(xp / 1000) + 1);
     const used = Object.values(this.options.attributes).reduce((sum, value) => sum + Number(value), 0);
     const points = Math.max(0, playerLevel + 3 - used);
     const current = Number(this.options.attributes[attribute]);
@@ -695,7 +767,51 @@ export class GameOverlay {
 
     this.options.attributes[attribute] = Math.max(1, current + delta);
     this.saveOptions();
+    this.actions.updatePlayerTuning?.(this.options.playerTuning);
     this.renderAttributes();
+  }
+
+  renderPlayerTuningFields() {
+    if (!this.refs['player-tuning']) {
+      return;
+    }
+
+    this.refs['player-tuning'].replaceChildren(...Object.entries(PLAYER_TUNING_LABELS).map(([key, [label, min, max, step, suffix]]) => {
+      const value = Number(this.options.playerTuning[key]);
+      const row = document.createElement('label');
+      row.className = 'overlay-live-control';
+      row.innerHTML = `
+        <span>${label}</span>
+        <input type="range" min="${min}" max="${max}" step="${step}" data-player-tuning="${key}" value="${value}">
+        <output data-player-tuning-output="${key}">${formatTuningValue(value, suffix)}</output>
+      `;
+      return row;
+    }));
+  }
+
+  renderInventoryEditorFields() {
+    if (!this.refs['resource-editor']) {
+      return;
+    }
+
+    const inventory = this.state?.inventory ?? {};
+    this.refs['resource-editor'].replaceChildren(...Object.entries(RESOURCE_EDITOR_LABELS).map(([key, label]) => {
+      const row = document.createElement('label');
+      row.className = 'overlay-resource-control';
+      row.innerHTML = `
+        <span>${label}</span>
+        <input type="number" min="0" max="999999" step="1" data-inventory-editor="${key}" value="${inventory[key] ?? 0}">
+      `;
+      return row;
+    }));
+  }
+
+  updateEditorOutputs() {
+    this.element.querySelectorAll('[data-player-tuning-output]').forEach((output) => {
+      const key = output.dataset.playerTuningOutput;
+      const suffix = PLAYER_TUNING_LABELS[key]?.[4] ?? '';
+      output.textContent = formatTuningValue(this.options.playerTuning[key], suffix);
+    });
   }
 
   applyOptions() {
@@ -832,6 +948,10 @@ function formatLabValue(key, value) {
   }
 
   return `${value}%`;
+}
+
+function formatTuningValue(value, suffix) {
+  return `${Number(value)}${suffix}`;
 }
 
 function parseLabValue(element) {

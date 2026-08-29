@@ -60,6 +60,7 @@ export class Game {
     this.cameraController = new CameraController();
     this.scene = this.createScene();
     this.lastFrameTime = 0;
+    this.vehicleMode = false;
     this.input = new InputManager(this.canvas);
     this.audio = new AudioManager(this.eventBus);
     this.world = new World(this.profile);
@@ -153,7 +154,9 @@ export class Game {
       startQuest: (questId) => this.serverNpcs.startQuest(questId),
       trade: (merchantId, offerId) => this.serverNpcs.trade(merchantId, offerId),
       registerProfile: (profile) => this.serverNpcs.registerProfile(profile),
-      applyGameOptions: (options, applyOptions) => this.applyGameOptions(options, applyOptions)
+      applyGameOptions: (options, applyOptions) => this.applyGameOptions(options, applyOptions),
+      updatePlayerTuning: (tuning) => this.applyPlayerTuning(tuning),
+      updateInventoryValue: (resource, value) => this.updateInventoryValue(resource, value)
     });
     this.applyGameOptions(this.gameOptions, { rebuild: false });
     this.animationFrameId = 0;
@@ -262,7 +265,8 @@ export class Game {
     }
 
     const paused = this.story.transmissionOpen || this.respawn.active;
-    this.player.update(deltaTime, this.input, this.world, !paused);
+    this.updateVehicleMode(paused);
+    this.player.update(deltaTime, this.input, this.world, !paused, this.vehicleMode ? 2.05 : 1);
     this.world.update(deltaTime, this.player.position);
     this.combat.updateAim(this.input.getPointer());
 
@@ -318,7 +322,8 @@ export class Game {
       position: {
         x: this.player.position.x,
         z: this.player.position.z
-      }
+      },
+      vehicleMode: this.vehicleMode
     };
     this.hud.update(deltaTime, hudState);
     this.overlay.update(deltaTime, hudState);
@@ -328,10 +333,33 @@ export class Game {
     this.gameOptions = options;
     const lab = options?.lab ?? {};
     this.world.applyOptions(lab, applyOptions);
+    this.cameraController.applyOptions(options ?? {});
     this.zombies.applyOptions(lab);
     this.towers.applyOptions(lab);
     this.serverNpcs.applyOptions(lab);
     this.cityAllies.applyOptions(lab);
+    this.applyPlayerTuning(options?.playerTuning);
+  }
+
+  applyPlayerTuning(tuning = {}) {
+    const normalized = {
+      moveSpeed: Number(tuning?.moveSpeed ?? 100) / 100,
+      maxHealthBonus: Number(tuning?.maxHealthBonus ?? 0),
+      damageMultiplier: Number(tuning?.damageMultiplier ?? 100) / 100,
+      fireRateMultiplier: Number(tuning?.fireRateMultiplier ?? 100) / 100,
+      rangeBonus: Number(tuning?.rangeBonus ?? 0)
+    };
+
+    this.player.applyTuning(normalized);
+    this.combat.applyTuning(normalized);
+    this.progression.update();
+  }
+
+  updateInventoryValue(resource, value) {
+    const current = this.inventory.snapshot();
+    current[resource] = Number.isFinite(value) ? Math.max(0, Math.floor(value)) : 0;
+    this.inventory.replace(current, 'live-editor');
+    this.scheduleSave();
   }
 
   createSaveSnapshot() {
@@ -349,6 +377,32 @@ export class Game {
 
   scheduleSave() {
     this.saveSystem.schedule(() => this.createSaveSnapshot());
+  }
+
+  updateVehicleMode(paused) {
+    if (paused || this.player.isDead) {
+      this.vehicleMode = false;
+      return;
+    }
+
+    if (!this.input.consumeInteract()) {
+      return;
+    }
+
+    if (this.vehicleMode) {
+      this.vehicleMode = false;
+      this.eventBus.emit('vehicle:mode', { active: false });
+      return;
+    }
+
+    const vehicle = this.world.findNearestVehicle(this.player.position, 2.6);
+
+    if (!vehicle) {
+      return;
+    }
+
+    this.vehicleMode = true;
+    this.eventBus.emit('vehicle:mode', { active: true, vehicle });
   }
 
   updateLightingPosition() {

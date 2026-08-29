@@ -26,10 +26,19 @@ export class CombatSystem {
     this.effects.name = 'CombatEffects';
     this.tracers = [];
     this.progression = null;
+    this.tuning = { damageMultiplier: 1, fireRateMultiplier: 1, rangeBonus: 0 };
   }
 
   setProgressionSystem(progression) {
     this.progression = progression;
+  }
+
+  applyTuning(tuning = {}) {
+    this.tuning = {
+      damageMultiplier: clampNumber(tuning.damageMultiplier, 0.25, 6, 1),
+      fireRateMultiplier: clampNumber(tuning.fireRateMultiplier, 0.25, 5, 1),
+      rangeBonus: clampNumber(tuning.rangeBonus, 0, 35, 0)
+    };
   }
 
   addTo(scene) {
@@ -116,7 +125,7 @@ export class CombatSystem {
 
     if (target) {
       const targetSystem = target.online ? this.onlineNpcSystem : this.zombieSystem;
-      targetSystem.damageZombie(target.zombie, GAMEPLAY.weapon.damage, 'player');
+      targetSystem.damageZombie(target.zombie, Math.round(GAMEPLAY.weapon.damage * this.tuning.damageMultiplier), 'player');
     }
 
     this.audio.playGameEffect('revolver');
@@ -196,18 +205,19 @@ export class CombatSystem {
       reloadProgress: this.reloadRemaining > 0
         ? 1 - this.reloadRemaining / GAMEPLAY.weapon.reloadDuration
         : 0,
+      damage: Math.round(GAMEPLAY.weapon.damage * this.tuning.damageMultiplier),
       range: this.getRange(),
       fireInterval: this.getFireInterval()
     };
   }
 
   getRange() {
-    return GAMEPLAY.weapon.range + (this.progression?.getSnapshot().bonuses.range ?? 0);
+    return GAMEPLAY.weapon.range + this.tuning.rangeBonus + (this.progression?.getSnapshot().bonuses.range ?? 0);
   }
 
   getFireInterval() {
     const bonus = this.progression?.getSnapshot().bonuses.fireRate ?? 0;
-    return Math.max(0.16, GAMEPLAY.weapon.fireInterval * (1 - bonus));
+    return Math.max(0.08, (GAMEPLAY.weapon.fireInterval * (1 - bonus)) / this.tuning.fireRateMultiplier);
   }
 
   dispose() {
@@ -219,6 +229,11 @@ export class CombatSystem {
     this.tracers.length = 0;
     this.effects.clear();
   }
+}
+
+function clampNumber(value, min, max, fallback) {
+  const numeric = Number(value);
+  return Number.isFinite(numeric) ? Math.max(min, Math.min(max, numeric)) : fallback;
 }
 
 function pickNearestTarget(localTarget, onlineTarget) {

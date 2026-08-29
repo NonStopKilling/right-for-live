@@ -29,21 +29,26 @@ export class NetworkNpcSystem {
     this.economy = { merchants: [] };
     this.server = resolveServerConfig();
     this.assets = this.createAssets();
-    if (this.options.serverNpcs || this.options.economyOnline) {
+    if (this.isConnectionNeeded()) {
       this.connect();
     }
   }
 
   applyOptions(options = {}) {
-    const wasEnabled = this.options.serverNpcs || this.options.economyOnline;
+    const wasEnabled = this.isConnectionNeeded();
     this.options = { ...this.options, ...options };
-    const isEnabled = this.options.serverNpcs || this.options.economyOnline;
+    const isEnabled = this.isConnectionNeeded();
+    const showServerNpcs = this.shouldShowServerNpcs();
 
     if (!isEnabled) {
       this.ws?.close();
       this.connected = false;
       this.applySnapshot([]);
       return;
+    }
+
+    if (!showServerNpcs) {
+      this.applySnapshot([]);
     }
 
     if (!wasEnabled && !this.connected) {
@@ -124,7 +129,7 @@ export class NetworkNpcSystem {
 
     if (this.connected && this.stateTimer <= 0) {
       this.stateTimer = 0.18;
-      if (this.options.serverNpcs) {
+      if (this.shouldShowServerNpcs()) {
         this.send('player:state', {
           x: this.player.position.x,
           z: this.player.position.z,
@@ -165,7 +170,7 @@ export class NetworkNpcSystem {
       const message = JSON.parse(event.data);
 
       if (message.type === 'npc:snapshot') {
-        this.applySnapshot(this.options.serverNpcs ? message.payload?.npcs ?? [] : []);
+        this.applySnapshot(this.shouldShowServerNpcs() ? message.payload?.npcs ?? [] : []);
       } else if (message.type === 'npc:damaged') {
         this.upsertNpc(message.payload);
       } else if (message.type === 'quest:snapshot') {
@@ -185,6 +190,14 @@ export class NetworkNpcSystem {
     } catch {
       // Ignore malformed server packets; the local game remains playable.
     }
+  }
+
+  shouldShowServerNpcs() {
+    return Boolean(this.options.serverNpcs) && this.options.mapMode !== 'city';
+  }
+
+  isConnectionNeeded() {
+    return this.shouldShowServerNpcs() || Boolean(this.options.economyOnline);
   }
 
   applySnapshot(npcs) {

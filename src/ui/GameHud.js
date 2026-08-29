@@ -149,6 +149,9 @@ export class GameHud {
       eventBus.on('tower:teleported', () => {
         this.showNotification('TORRE TELETRANSPORTADA -20 EXTRANO');
       }),
+      eventBus.on('vehicle:mode', ({ active }) => {
+        this.showNotification(active ? 'VEHICULO: VELOCIDAD AUMENTADA' : 'VEHICULO: A PIE');
+      }),
       eventBus.on('tower:placement-blocked', ({ reason }) => {
         this.showNotification(BUILD_REASONS[reason] ?? 'NO SE PUEDE CONSTRUIR');
       }),
@@ -240,6 +243,10 @@ export class GameHud {
       label = 'RECARGANDO REVOLVER';
       detail = `${state.weapon.magazine} / ${state.weapon.reserve}`;
       progress = state.weapon.reloadProgress;
+    } else if (state.vehicleMode) {
+      label = 'VEHICULO ACTIVO';
+      detail = '[E] BAJAR · MAYOR VELOCIDAD EN AFUERAS';
+      progress = 1;
     }
 
     this.refs['context-label'].textContent = label;

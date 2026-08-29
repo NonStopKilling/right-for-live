@@ -7,6 +7,7 @@ const QUATERNION = new THREE.Quaternion();
 const COLOR = new THREE.Color();
 const SCALE = new THREE.Vector3();
 const POSITION = new THREE.Vector3();
+const CITY_ROAD_LIMIT = 108;
 
 export class Terrain {
   constructor(profile) {
@@ -86,6 +87,10 @@ export class Terrain {
     let level = 1 + Math.floor(clamp((elevation * 0.74 + broadElevation * 0.26 - 0.2) * 4.7 * relief, 0, WORLD.maxTerrainLevel - 1));
 
     if (distanceFromOrigin < WORLD.originClearRadius) {
+      level = 1;
+    }
+
+    if (city && this.isTrail(gx, gz)) {
       level = 1;
     }
 
@@ -307,7 +312,7 @@ export class Terrain {
   }
 
   isCityRoad(gx, gz) {
-    if (Math.abs(gx) > 52 || Math.abs(gz) > 52) {
+    if (Math.abs(gx) > CITY_ROAD_LIMIT || Math.abs(gz) > CITY_ROAD_LIMIT) {
       return false;
     }
 
@@ -318,7 +323,7 @@ export class Terrain {
   }
 
   isCityHighway(gx, gz) {
-    return Math.abs(gx) <= 4 && Math.abs(gz) > 52;
+    return Math.abs(gx) <= 4 && Math.abs(gz) > CITY_ROAD_LIMIT;
   }
 
   seed(offset) {
