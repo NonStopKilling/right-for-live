@@ -418,7 +418,12 @@ export class TowerSystem {
 
   getRespawnPoint() {
     const tower = this.getActiveTower();
-    return tower ? tower.position.clone().add(new THREE.Vector3(0.8, 0, 0.8)) : this.world.getSpawnPoint();
+    const point = tower ? tower.position.clone().add(new THREE.Vector3(0.8, 0, 0.8)) : this.world.getSpawnPoint();
+    if (this.world.options?.mapMode === 'island') {
+      if (!this.world.isWalkableWorld(point.x, point.z)) return this.world.getSpawnPoint();
+      point.y = this.world.getHeightAtWorld(point.x, point.z);
+    }
+    return point;
   }
 
   isInsideSafeZone(x, z) {

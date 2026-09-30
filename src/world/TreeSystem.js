@@ -1,8 +1,11 @@
+import { createPalmFrondGeometry } from './PalmGeometry.js';
+import { isIslandLandmark } from './IslandMap.js';
 import * as THREE from 'three';
 import { DEFAULT_LAB_OPTIONS } from '../config/gameOptions.js';
 import { WORLD, hash2D, valueNoise2D } from '../utils/constants.js';
 
 const MATRIX = new THREE.Matrix4();
+const EULER = new THREE.Euler();
 const COLOR = new THREE.Color();
 const QUATERNION = new THREE.Quaternion();
 const Y_AXIS = new THREE.Vector3(0, 1, 0);
@@ -81,6 +84,13 @@ export class TreeSystem {
     this.profile = profile;
     this.options = structuredClone(DEFAULT_LAB_OPTIONS);
     this.geometry = new THREE.BoxGeometry(1, 1, 1);
+    this.palmTrunkGeometry = new THREE.CylinderGeometry(0.43, 0.5, 1, 7);
+    this.palmFrondGeometry = createPalmFrondGeometry();
+    this.naturalIslandPalettes = profile.treePalettes.map(palette => ({
+      base: new THREE.Color(palette.base).lerp(new THREE.Color(0x58784d), 0.66).getHex(),
+      shade: new THREE.Color(palette.shade).lerp(new THREE.Color(0x3c573c), 0.66).getHex(),
+      tip: new THREE.Color(palette.tip).lerp(new THREE.Color(0x81945a), 0.66).getHex()
+    }));
     this.materials = {
       trunk: new THREE.MeshStandardMaterial({
         color: 0xffffff,
@@ -89,6 +99,7 @@ export class TreeSystem {
         flatShading: true
       }),
       foliage: new THREE.MeshStandardMaterial({
+        side: THREE.DoubleSide,
         color: 0xffffff,
         roughness: 0.78,
         metalness: 0,
@@ -109,6 +120,8 @@ export class TreeSystem {
     const group = new THREE.Group();
     group.name = `VegetationChunk-${chunkKey}`;
     const trunks = [];
+    const palmTrunks = [];
+    const palmLeaves = [];
     const foliage = [];
     const caps = [];
 
@@ -117,13 +130,18 @@ export class TreeSystem {
 
       if (isTree) {
         if (!depletedResources.has(this.getResourceId(cell))) {
-          this.addTreeRecipe(cell, trunks, foliage, caps);
+          if (this.isPalm(cell)) this.addPalmRecipe(cell, palmTrunks, palmLeaves);
+          else this.addTreeRecipe(cell, trunks, foliage, caps);
         }
       } else if (this.shouldPlaceBush(cell)) {
         this.addBushRecipe(cell, foliage, caps);
       }
     }
 
+    const palms = this.createMesh('PalmTrunks',palmTrunks,this.materials.trunk,true,this.palmTrunkGeometry);
+    const fronds = this.createMesh('PalmFronds',palmLeaves,this.materials.foliage,true,this.palmFrondGeometry);
+    if (palms) group.add(palms);
+    if (fronds) group.add(fronds);
     const trunkMesh = this.createMesh('TreeTrunks', trunks, this.materials.trunk, true);
     const foliageMesh = this.createMesh('TreeCanopiesAndBushes', foliage, this.materials.foliage, true);
     const capMesh = this.createMesh('VegetationColorCaps', caps, this.materials.cap, false);
@@ -151,7 +169,7 @@ export class TreeSystem {
         id: this.getResourceId(cell),
         type: 'wood',
         layer: 'vegetation',
-        label: 'MADERA',
+        label: this.isPalm(cell) ? 'PALMERA · MADERA' : 'MADERA',
         gx: cell.gx,
         gz: cell.gz,
         x,
@@ -165,7 +183,27 @@ export class TreeSystem {
     return `wood:${cell.gx}:${cell.gz}`;
   }
 
+  isPalm(cell) {
+    return this.terrain.options.mapMode === 'island' &&
+      (cell.surface === 'sand' || hash2D(cell.gx, cell.gz, this.seed(2191)) < 0.88);
+  }
+
   shouldPlaceTree(cell) {
+    if (this.terrain.options.mapMode === 'island') {
+      if (cell.water || isIslandLandmark(cell.gx,cell.gz) ||
+          !['meadow','sand','moss','soil'].includes(cell.surface) ||
+          Math.hypot(cell.gx - 2, cell.gz + 2) < 8 || this.hasNearbyTrail(cell.gx,cell.gz)) return false;
+      const density = Math.max(0, Number(this.options.forestDensity) / 100);
+      const score = hash2D(cell.gx,cell.gz,this.seed(701));
+      if (density === 0 || score < 1 - Math.min(0.7,density * 0.3)) return false;
+      for (let dz = -3; dz <= 3; dz++) for (let dx = -3; dx <= 3; dx++) {
+        if ((dx || dz) && hash2D(cell.gx+dx,cell.gz+dz,this.seed(701)) > score) return false;
+      }
+      return true;
+    }
+    if (this.options.mapMode === 'island' || this.terrain.options.mapMode === 'island') {
+      if (isIslandLandmark(cell.gx, cell.gz)) return false;
+    }
     if (cell.water || (cell.surface !== 'meadow' && cell.surface !== 'moss' && cell.surface !== 'soil')) {
       return false;
     }
@@ -202,6 +240,9 @@ export class TreeSystem {
   }
 
   shouldPlaceBush(cell) {
+    if (this.options.mapMode === 'island' || this.terrain.options.mapMode === 'island') {
+      if (isIslandLandmark(cell.gx, cell.gz)) return false;
+    }
     if (cell.water || (cell.surface !== 'meadow' && cell.surface !== 'moss')) {
       return false;
     }
@@ -221,6 +262,45 @@ export class TreeSystem {
       this.terrain.isTrail(gx, gz + 1) ||
       this.terrain.isTrail(gx, gz - 1)
     );
+  }
+
+  addPalmRecipe(cell, trunks, foliage) {
+    const random = hash2D(cell.gx,cell.gz,this.seed(2201));
+    const { x, z } = this.terrain.gridToWorld(cell.gx,cell.gz);
+    const ground = cell.level * WORLD.blockHeight;
+    const variant = Math.floor(random * 6);
+    const height = [4.8, 3.8, 5.8, 4.2, 6.3, 3.5][variant] + random * 0.5;
+    const lean = [0.8, 1.65, 0.45, 1.1, 1.9, 0.25][variant];
+    const angle = random * Math.PI * 2;
+    const palette = this.resolveTreePalette(cell.gx,cell.gz);
+    const trunkColor = this.resolveFamilyColor('trunk',cell.gx,cell.gz,839);
+    const crown = new THREE.Vector3();
+    const start = new THREE.Vector3();
+    const end = new THREE.Vector3();
+    const direction = new THREE.Vector3();
+    const up = new THREE.Vector3(0,1,0);
+    for (let i = 0; i < 9; i++) {
+      const a = i / 9, b = (i + 1) / 9;
+      start.set(x + Math.cos(angle) * lean * a*a, ground + height*a, z + Math.sin(angle) * lean * a*a);
+      end.set(x + Math.cos(angle) * lean * b*b, ground + height*b, z + Math.sin(angle) * lean * b*b);
+      direction.subVectors(end,start);
+      const thickness = (variant === 1 || variant === 4 ? 0.58 : 0.46) * (1 - a*0.35);
+      trunks.push({x:(start.x+end.x)/2,y:(start.y+end.y)/2,z:(start.z+end.z)/2,
+        scaleX:thickness,scaleY:direction.length()+0.03,scaleZ:thickness,
+        quaternion:new THREE.Quaternion().setFromUnitVectors(up,direction.normalize()),
+        color:COLOR.setHex(trunkColor).multiplyScalar(i%2 ? 0.92 : 1.06).getHex()});
+      crown.copy(end);
+    }
+    const leaves = variant === 1 || variant === 4 ? 10 : variant === 5 ? 7 : 8;
+    for (let i = 0; i < leaves; i++) {
+      const a = angle + i * Math.PI * 2 / leaves;
+      const size = [1.15,1.25,1.0,0.95,1.42,0.86][variant];
+      foliage.push({x:crown.x,y:crown.y,z:crown.z,scaleX:size,scaleY:1,scaleZ:size,
+        rotation:-a,tilt:(i%3-1)*0.16, color:i%3 ? palette.base : palette.shade});
+    }
+    // Young upright leaves break the flat umbrella silhouette.
+    for (let i = 0; i < 3; i++) foliage.push({x:crown.x,y:crown.y,z:crown.z,
+      scaleX:0.65,scaleY:0.7,scaleZ:0.7,rotation:-angle-i*2.1,tilt:0.8,color:palette.base});
   }
 
   addTreeRecipe(cell, trunks, foliage, caps) {
@@ -357,7 +437,8 @@ export class TreeSystem {
     const variety = Math.max(0, Math.min(1, Number(this.options.treeColorVariety) / 100));
     const paletteCount = Math.max(1, Math.ceil(this.profile.treePalettes.length * variety));
     const index = Math.min(paletteCount - 1, Math.floor(region * paletteCount));
-    return this.profile.treePalettes[index];
+    return this.terrain.options.mapMode === 'island' && this.options.islandNaturalColors
+      ? this.naturalIslandPalettes[index] : this.profile.treePalettes[index];
   }
 
   resolveFamilyColor(family, gx, gz, seedOffset) {
@@ -370,19 +451,20 @@ export class TreeSystem {
     return WORLD.seed + Math.floor(Number(this.options.seedOffset) || 0) + offset;
   }
 
-  createMesh(name, blocks, material, castsShadow) {
+  createMesh(name, blocks, material, castsShadow, geometry = this.geometry) {
     if (blocks.length === 0) {
       return null;
     }
 
-    const mesh = new THREE.InstancedMesh(this.geometry, material, blocks.length);
+    const mesh = new THREE.InstancedMesh(geometry, material, blocks.length);
     mesh.name = name;
     mesh.castShadow = castsShadow;
     mesh.receiveShadow = true;
 
     blocks.forEach((block, index) => {
       POSITION.set(block.x, block.y, block.z);
-      QUATERNION.setFromAxisAngle(Y_AXIS, block.rotation);
+      if (block.quaternion) QUATERNION.copy(block.quaternion);
+      else QUATERNION.setFromEuler(EULER.set(0, block.rotation, block.tilt ?? 0));
       SCALE.set(block.scaleX, block.scaleY, block.scaleZ);
       MATRIX.compose(POSITION, QUATERNION, SCALE);
       mesh.setMatrixAt(index, MATRIX);
@@ -397,6 +479,8 @@ export class TreeSystem {
 
   dispose() {
     this.geometry.dispose();
+    this.palmTrunkGeometry.dispose();
+    this.palmFrondGeometry.dispose();
     Object.values(this.materials).forEach((material) => material.dispose());
   }
 }

@@ -1,3 +1,4 @@
+import { isIslandLandmark } from './IslandMap.js';
 import * as THREE from 'three';
 import { WORLD, hash2D } from '../utils/constants.js';
 
@@ -128,6 +129,7 @@ export class PropSystem {
   }
 
   shouldPlaceRock(cell) {
+    if (this.terrain.options.mapMode === 'island' && (cell.water || cell.crater || isIslandLandmark(cell.gx, cell.gz))) return false;
     if (cell.surface === 'trail' || Math.hypot(cell.gx, cell.gz) < WORLD.originClearRadius - 1) {
       return false;
     }
@@ -137,6 +139,7 @@ export class PropSystem {
   }
 
   shouldPlaceArtifact(cell) {
+    if (this.terrain.options.mapMode === 'island' && (cell.water || cell.crater || isIslandLandmark(cell.gx, cell.gz))) return false;
     if (cell.gx === 5 && cell.gz === -4) {
       return true;
     }
@@ -149,6 +152,7 @@ export class PropSystem {
   }
 
   shouldPlaceSprite(cell) {
+    if (this.terrain.options.mapMode === 'island' && (cell.water || cell.crater || isIslandLandmark(cell.gx, cell.gz))) return false;
     if (cell.surface !== 'meadow' && cell.surface !== 'moss') {
       return false;
     }

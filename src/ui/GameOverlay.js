@@ -191,10 +191,32 @@ export class GameOverlay {
                 <select data-lab-option="mapMode">
                   <option value="forest">Bosque</option>
                   <option value="city">Ciudad</option>
+                  <option value="island">Isla volcánica</option>
                 </select>
               </label>
               <button class="overlay-secondary" type="button" data-action="reset-lab">Reset LAB</button>
             </div>
+            <fieldset class="overlay-lab-group overlay-lab-group--island">
+              <legend>Isla volcánica · visual y fauna</legend>
+              <label class="overlay-toggle"><input type="checkbox" data-lab-option="islandNaturalColors"> Paleta natural de la isla</label>
+              <label class="overlay-toggle"><input type="checkbox" data-lab-option="islandFishEnabled"> Peces costeros activos</label>
+              <label class="overlay-lab-control">Cantidad de peces
+                <input type="range" min="0" max="100" step="1" data-lab-option="islandFishDensity">
+                <output data-lab-output="islandFishDensity">65%</output>
+              </label>
+              <small>La paleta cambia colores sin crear más objetos. Los peces usan mallas compartidas.</small>
+            </fieldset>
+            <fieldset class="overlay-lab-group overlay-lab-group--quality">
+              <legend>Imagen y rendimiento · todos los mapas</legend>
+              <label>Resolución interna
+                <select data-option="graphics">
+                  <option value="performance">Rendimiento · hasta 720 × 405</option>
+                  <option value="balanced">Equilibrado · hasta 960 × 540</option>
+                  <option value="cinematic">Nítido · hasta 1280 × 720</option>
+                </select>
+              </label>
+              <label class="overlay-toggle"><input type="checkbox" data-lab-option="dynamicShadows"> Sombras dinámicas del sol</label>
+            </fieldset>
             ${this.createLabGroup('Mundo procedural', [
               ['seedOffset', 'Semilla offset', 'range', -800, 800, 1],
               ['terrainRelief', 'Relieve', 'range', 35, 180, 1],
@@ -405,7 +427,13 @@ export class GameOverlay {
       const element = event.target;
       this.options.lab[labOption] = parseLabValue(element);
       this.saveOptions();
-      this.actions.applyGameOptions?.(this.options, { rebuild: true, forceRebuild: true });
+      const fishOnly = labOption === 'islandFishEnabled' || labOption === 'islandFishDensity';
+      const visualOnly = labOption === 'dynamicShadows';
+      this.actions.applyGameOptions?.(this.options, {
+        rebuild: !(fishOnly || visualOnly),
+        forceRebuild: !(fishOnly || visualOnly),
+        fishOnly
+      });
       this.renderLabFields();
       return;
     }
@@ -438,10 +466,11 @@ export class GameOverlay {
     this.options[option] = element.type === 'checkbox' ? element.checked : element.value;
     this.saveOptions();
     this.applyOptions();
+    this.renderOptionFields();
 
     if (option === 'masterVolume') {
       this.actions.setAudioVolume?.(Number(element.value) / 100);
-    } else if (option === 'cameraView' || option === 'cameraZoomRange') {
+    } else if (option === 'cameraView' || option === 'cameraZoomRange' || option === 'graphics') {
       this.actions.applyGameOptions?.(this.options, { rebuild: false });
     }
   }
@@ -940,7 +969,7 @@ function formatQuestState(state) {
 
 function formatLabValue(key, value) {
   if (key === 'mapMode') {
-    return value === 'city' ? 'Ciudad' : 'Bosque';
+    return value === 'island' ? 'Isla volcánica' : value === 'city' ? 'Ciudad' : 'Bosque';
   }
 
   if (key === 'seedOffset') {

@@ -21,6 +21,7 @@ import { GameHud } from '../ui/GameHud.js';
 import { GameOverlay } from '../ui/GameOverlay.js';
 import { RENDER } from '../utils/constants.js';
 import { World } from '../world/World.js';
+import { ISLAND_PLACES, MOAI_SITES } from '../world/IslandMap.js';
 import { CameraController } from './Camera.js';
 import { EventBus } from './EventBus.js';
 import { Renderer } from './Renderer.js';
@@ -166,7 +167,8 @@ export class Game {
     );
 
     if (loadedSave && this.towers.getActiveTower()) {
-      this.player.respawn(this.towers.getRespawnPoint());
+      const checkpoint = this.towers.getRespawnPoint();
+      this.player.respawn(this.world.isWalkableWorld(checkpoint.x, checkpoint.z) ? checkpoint : this.world.getSpawnPoint());
     }
 
     this.world.addTo(this.scene);
@@ -212,7 +214,7 @@ export class Game {
     this.sunOffset = new THREE.Vector3(...sun.position);
     this.sunTarget = new THREE.Object3D();
     this.sun.target = this.sunTarget;
-    this.sun.castShadow = true;
+    this.sun.castShadow = this.gameOptions.lab?.dynamicShadows !== false;
     this.sun.shadow.mapSize.set(2048, 2048);
     this.sun.shadow.camera.left = -25;
     this.sun.shadow.camera.right = 25;
@@ -267,7 +269,7 @@ export class Game {
     const paused = this.story.transmissionOpen || this.respawn.active;
     this.updateVehicleMode(paused);
     this.player.update(deltaTime, this.input, this.world, !paused, this.vehicleMode ? 2.05 : 1);
-    this.world.update(deltaTime, this.player.position);
+    this.world.update(deltaTime, this.player.position, this.zombies.zombies.map(zombie => zombie.position));
     this.combat.updateAim(this.input.getPointer());
 
     if (this.combat.aimPoint) {
@@ -294,7 +296,7 @@ export class Game {
     this.cityAllies.update(deltaTime, this.zombies);
     this.serverNpcs.update(deltaTime);
     this.respawn.update(deltaTime);
-    this.objectives.update();
+    if (this.world.options.mapMode !== 'island') this.objectives.update();
     this.progression.update();
     this.cameraController.update(deltaTime, this.player.position);
     this.updateLightingPosition();
@@ -302,6 +304,12 @@ export class Game {
   }
 
   updateHud(deltaTime) {
+    const nearbyIslandPlace = this.world.options.mapMode === 'island'
+      ? [...ISLAND_PLACES, ...MOAI_SITES].find(place =>
+          Math.hypot(this.player.position.x - place.gx * 0.84,
+            this.player.position.z - place.gz * 0.84) < 14)
+      : null;
+    const anakena = MOAI_SITES.find(site => site.name.startsWith('Anakena'));
     const hudState = {
       player: this.player.getHealthSnapshot(),
       weapon: this.combat.getSnapshot(),
@@ -311,7 +319,10 @@ export class Game {
       tower: this.towers.getActiveSnapshot(),
       towers: this.towers.getListSnapshot(),
       story: this.story.getSnapshot(),
-      objective: this.objectives.getSnapshot(),
+      objective: this.world.options.mapMode === 'island'
+        ? { title: 'EXPLORA LA ISLA', hint: nearbyIslandPlace?.name ?? 'Anakena · moáis · Rano Kau',
+          target: -anakena.gz * 0.84, x: anakena.gx * 0.84 }
+        : this.objectives.getSnapshot(),
       progression: this.progression.getSnapshot(),
       mapMode: this.gameOptions.lab?.mapMode ?? 'forest',
       onlineQuests: this.serverNpcs.getQuestSnapshot(),
@@ -330,9 +341,19 @@ export class Game {
   }
 
   applyGameOptions(options, applyOptions = {}) {
+    const mapChanged = this.world.options.mapMode !== options?.lab?.mapMode;
     this.gameOptions = options;
+    const previousGraphics = this.renderer.graphicsPreset;
+    this.renderer.setGraphicsPreset(options?.graphics);
+    if (previousGraphics !== this.renderer.graphicsPreset && this.renderer.size.cssWidth > 1) this.resize();
     const lab = options?.lab ?? {};
-    this.world.applyOptions(lab, applyOptions);
+    if (this.sun) this.sun.castShadow = lab.dynamicShadows !== false;
+    this.world.applyOptions(lab, mapChanged ? { ...applyOptions, rebuild: true, forceRebuild: true } : applyOptions);
+    if (mapChanged || !this.world.isWalkableWorld(this.player.position.x, this.player.position.z)) {
+      this.player.position.copy(this.world.getSpawnPoint());
+      this.world.update(0, this.player.position);
+      this.vehicleMode = false;
+    }
     this.cameraController.applyOptions(options ?? {});
     this.zombies.applyOptions(lab);
     this.towers.applyOptions(lab);

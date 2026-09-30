@@ -1,3 +1,4 @@
+import { islandCell } from './IslandMap.js';
 import * as THREE from 'three';
 import { DEFAULT_LAB_OPTIONS } from '../config/gameOptions.js';
 import { WORLD, clamp, fractalNoise2D, hash2D, valueNoise2D } from '../utils/constants.js';
@@ -68,6 +69,7 @@ export class Terrain {
   }
 
   getCell(gx, gz) {
+    if (this.options.mapMode === 'island') return islandCell(gx, gz, this.seed(701));
     const city = this.isCityMap();
     const elevation = fractalNoise2D(gx, gz, this.seed(101));
     const broadElevation = valueNoise2D(gx, gz, 46, this.seed(109));
@@ -160,6 +162,10 @@ export class Terrain {
     const instances = { surface: [], earth: [], stone: [], trail: [], cap: [] };
 
     for (const cell of cells) {
+      if (this.options.mapMode === 'island') {
+        instances.surface.push({ cell, layer: cell.level, color: this.resolveBlockColor(cell, 'surface', 1) });
+        continue;
+      }
       for (let layer = 1; layer <= cell.level; layer += 1) {
         const kind = this.resolveLayerKind(cell, layer);
         instances[kind].push({
@@ -214,6 +220,10 @@ export class Terrain {
         isCap ? 0.014 : WORLD.blockHeight * 0.94,
         WORLD.cellSize * (isCap ? 0.84 : 0.91)
       );
+      if (this.options.mapMode === 'island') {
+        POSITION.y = block.cell.level * WORLD.blockHeight / 2;
+        SCALE.set(WORLD.cellSize, block.cell.level * WORLD.blockHeight, WORLD.cellSize);
+      }
       MATRIX.compose(POSITION, QUATERNION, SCALE);
       mesh.setMatrixAt(index, MATRIX);
       mesh.setColorAt(index, COLOR.setHex(block.color));
@@ -250,6 +260,14 @@ export class Terrain {
   }
 
   resolveBlockColor(cell, kind, layer) {
+    if (this.options.mapMode === 'island') {
+      const natural = this.options.islandNaturalColors;
+      const color = cell.surface === 'sand' ? (natural ? 0xd5c5a1 : 0xe9d9a2)
+        : cell.surface === 'soil' ? (natural ? 0x816851 : 0x997754)
+        : cell.surface === 'stone' ? (cell.crater ? (natural ? 0x514b45 : 0x543a35) : (natural ? 0x626660 : 0x59645e))
+        : (natural ? 0x70834d : 0x739c45);
+      return COLOR.setHex(color).multiplyScalar(0.94 + hash2D(cell.gx, cell.gz, this.seed(503)) * 0.12).getHex();
+    }
     let family = kind;
 
     if (kind === 'surface') {
@@ -279,6 +297,7 @@ export class Terrain {
   }
 
   isTrail(gx, gz) {
+    if (this.options.mapMode === 'island') return Math.abs(gx - 2) <= 1 && gz < 0 && gz > -24;
     if (this.isCityMap()) {
       return this.isCityRoad(gx, gz) || this.isCityHighway(gx, gz);
     }

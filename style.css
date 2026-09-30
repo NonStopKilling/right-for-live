@@ -657,6 +657,7 @@ button {
   top: 64px;
   right: 14px;
   display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr);
   width: min(440px, calc(100vw - 28px));
   max-height: min(620px, calc(100vh - 82px));
   overflow: hidden;
@@ -734,7 +735,7 @@ button {
 }
 
 .overlay-command__body {
-  min-height: 330px;
+  min-height: 0;
   overflow: auto;
 }
 
@@ -1103,6 +1104,12 @@ button {
   color: #f1e69a;
   font-size: 8px;
   font-weight: 800;
+}
+
+.overlay-lab-group--island small {
+  color: #9fc1af;
+  font-size: 8px;
+  line-height: 1.35;
 }
 
 .overlay-lab-control {

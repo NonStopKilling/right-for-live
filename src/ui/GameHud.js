@@ -1,3 +1,4 @@
+import { ISLAND_MAP, ISLAND_OUTLINE, ISLAND_PLACES, MOAI_SITES, ISLAND_VOLCANOES } from '../world/IslandMap.js';
 const RESOURCE_LABELS = {
   wood: 'MADERA',
   stone: 'PIEDRA',
@@ -76,7 +77,13 @@ export class GameHud {
         <div class="hud-minimap__radar" data-hud="minimap-radar">
           <span class="hud-minimap__grid"></span>
           <span class="hud-minimap__north">N</span>
-          <span class="hud-minimap__player"></span>
+          <svg data-hud="island-map" viewBox="${ISLAND_MAP.minX} -395 ${ISLAND_MAP.maxX - ISLAND_MAP.minX} 650" aria-label="Mapa de la isla inspirado en Rapa Nui" style="position:absolute;inset:0;width:100%;height:100%;display:none">
+            <polygon points="${ISLAND_OUTLINE.map(p=>p.join(',')).join(' ')}" fill="#516f4f" stroke="#bfc28a" stroke-width="3" />
+            ${ISLAND_VOLCANOES.map(p=>`<circle cx="${p.gx}" cy="${p.gz}" r="7" fill="#a89472"><title>${p.name}</title></circle>`).join('')}
+            ${MOAI_SITES.map(p=>`<rect x="${p.gx-3}" y="${p.gz-3}" width="6" height="6" fill="#dfd5ab"><title>${p.name}</title></rect>`).join('')}
+            ${ISLAND_PLACES.map(p=>`<circle cx="${p.gx}" cy="${p.gz}" r="4" fill="#ddaf76"><title>${p.name}</title></circle>`).join('')}
+          </svg>
+          <span class="hud-minimap__player" data-hud="minimap-player"></span>
           <span class="hud-minimap__objective" data-hud="minimap-objective"></span>
           <span class="hud-minimap__items" data-hud="minimap-items"></span>
         </div>
@@ -179,7 +186,7 @@ export class GameHud {
     this.refs['health-text'].textContent = String(Math.ceil(state.player.health));
     this.refs.magazine.textContent = String(state.weapon.magazine);
     this.refs['player-level'].textContent = String(state.progression?.level ?? 1);
-    this.refs['map-mode'].textContent = state.mapMode === 'city' ? 'CIUDAD' : 'BOSQUE';
+    this.refs['map-mode'].textContent = state.mapMode === 'island' ? 'ISLA' : state.mapMode === 'city' ? 'CIUDAD' : 'BOSQUE';
     this.refs.reserve.textContent = String(state.weapon.reserve);
     this.refs.reload.textContent = state.weapon.reloading ? 'RECARGANDO' : 'LISTO';
     this.refs.reload.classList.toggle('is-active', state.weapon.reloading);
@@ -195,7 +202,7 @@ export class GameHud {
         ? `NIVEL ${state.tower.level} / MAXIMO`
         : `NIVEL ${state.tower.level} / ${state.tower.kills}-${state.tower.nextLevelKills} BAJAS`;
     } else {
-      this.refs['checkpoint-name'].textContent = 'FOGATA CENTRAL';
+      this.refs['checkpoint-name'].textContent = state.mapMode === 'island' ? 'BAHÍA DE LLEGADA' : 'FOGATA CENTRAL';
       this.refs['tower-meta'].textContent = 'SIN TORRE';
     }
 
@@ -297,10 +304,16 @@ export class GameHud {
   }
 
   updateMinimap(state) {
-    const scale = 2.15;
-    const player = state.position ?? { x: 0, z: 0 };
-    this.refs['minimap-zone'].textContent = state.mapMode === 'city' ? 'CIUDAD' : 'BOSQUE';
-    this.refs['minimap-objective'].style.transform = `translate(${clampMap(-player.x * scale)}px, ${clampMap((-state.objective.target - player.z) * scale)}px)`;
+    const island = state.mapMode === 'island';
+    const scale = island ? this.refs['minimap-radar'].clientWidth / ((ISLAND_MAP.maxX - ISLAND_MAP.minX) * 0.84) : 2.15;
+    const position = state.position ?? { x: 0, z: 0 };
+    const player = island ? {x:235*0.84,z:-70*0.84} : position;
+    this.refs['island-map'].style.display = island ? 'block' : 'none';
+    this.refs['minimap-player'].style.transform = island
+      ? `translate(${(position.x-player.x)*scale}px, ${(position.z-player.z)*scale}px) rotate(45deg)`
+      : 'rotate(45deg)';
+    this.refs['minimap-zone'].textContent = state.mapMode === 'island' ? 'ISLA' : state.mapMode === 'city' ? 'CIUDAD' : 'BOSQUE';
+    this.refs['minimap-objective'].style.transform = `translate(${clampMap(((state.objective.x ?? 0) - player.x) * scale)}px, ${clampMap((-state.objective.target - player.z) * scale)}px)`;
     this.refs['minimap-objective'].title = state.objective?.title ?? 'Objetivo';
 
     const towerDots = (state.towers ?? []).map((tower) => {

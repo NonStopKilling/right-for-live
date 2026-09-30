@@ -1,3 +1,6 @@
+import { IslandSystem } from './IslandSystem.js';
+import { IslandFishSystem } from './IslandFishSystem.js';
+import { ISLAND, isIslandAhu, isIslandDock } from './IslandMap.js';
 import * as THREE from 'three';
 import { loadGameOptions } from '../config/gameOptions.js';
 import { WORLD } from '../utils/constants.js';
@@ -30,6 +33,8 @@ export class World {
     this.trees = new TreeSystem(this.terrain, profile);
     this.props = new PropSystem(this.terrain, profile);
     this.water = new WaterSystem(this.terrain, profile);
+    this.island = new IslandSystem(this.terrain);
+    this.fish = new IslandFishSystem(this.terrain);
     this.city = new CitySystem(this.terrain, profile);
     this.landmark = new LandmarkSystem(this.terrain, profile);
     this.options = loadGameOptions().lab;
@@ -48,6 +53,9 @@ export class World {
   }
 
   getHeightAtWorld(x, z) {
+    const grid = this.terrain.worldToGrid(x,z);
+    if (this.options.mapMode === 'island' && isIslandDock(grid.gx,grid.gz)) return ISLAND.dockHeight;
+    if (this.options.mapMode === 'island' && isIslandAhu(grid.gx,grid.gz)) return this.terrain.getHeightAtWorld(x,z) + 0.44;
     return this.city.getWalkSurfaceAtWorld(x, z)?.y ?? this.terrain.getHeightAtWorld(x, z);
   }
 
@@ -111,7 +119,11 @@ export class World {
     return true;
   }
 
-  update(deltaTime, playerPosition) {
+  update(deltaTime, playerPosition, otherThreats = []) {
+    this.water.update(deltaTime);
+    if (this.options.mapMode === 'island') this.island.update(deltaTime, this.chunks);
+    if (this.options.mapMode === 'island') this.fish.update(deltaTime, this.chunks,
+      playerPosition ? [playerPosition, ...otherThreats] : otherThreats);
     if (this.options.landmarkMotion) {
       this.landmark.update(deltaTime);
     }
@@ -165,8 +177,10 @@ export class World {
     const group = new THREE.Group();
     group.name = `WorldChunk-${key}`;
     const layers = {
+      island: this.island.createChunkGroup(cells, key),
       terrain: this.terrain.createChunkGroup(cells, key),
       water: this.water.createChunkGroup(cells, key),
+      fish: this.fish.createChunkGroup(cells, key),
       city: this.city.createChunkGroup(cells, key, this.depletedResources),
       vegetation: this.options.mapMode === 'city'
         ? this.trees.createChunkGroup(outsideCityCells, key, this.depletedResources)
@@ -181,10 +195,10 @@ export class World {
     const resources = [
       ...(this.options.mapMode === 'city' ? [] : this.trees.getResourceNodes(cells)),
       ...(this.options.mapMode === 'city' ? this.trees.getResourceNodes(outsideCityCells) : []),
-      ...(this.options.mapMode === 'city' ? this.props.getResourceNodes(outsideCityCells) : []),
+      ...this.props.getResourceNodes(outsideCityCells),
       ...this.city.getResourceNodes(cells)
     ].map((resource) => ({ ...resource, chunkKey: key }));
-    group.add(layers.terrain, layers.water, layers.city, layers.vegetation, layers.props, layers.debug);
+    group.add(layers.island, layers.terrain, layers.fish, layers.water, layers.city, layers.vegetation, layers.props, layers.debug);
 
     this.chunks.set(key, { chunkX, chunkZ, cells, resources, layers, group });
     this.group.add(group);
@@ -258,16 +272,32 @@ export class World {
     });
   }
 
-  applyOptions(options = {}, { rebuild = true, forceRebuild = false } = {}) {
+  applyOptions(options = {}, { rebuild = true, forceRebuild = false, fishOnly = false } = {}) {
     this.options = { ...this.options, ...options };
+    this.landmark.group.visible = this.options.mapMode !== 'island';
     this.terrain.applyOptions(this.options);
     this.trees.applyOptions(this.options);
     this.water.applyOptions(this.options);
+    this.fish.applyOptions(this.options);
     this.city.applyOptions(this.options);
     this.setChunkDebugVisible(this.options.chunkDebug);
 
-    if (rebuild && (this.options.liveRebuild || forceRebuild)) {
+    if (fishOnly && this.options.mapMode === 'island') {
+      this.rebuildFishLayers();
+    } else if (rebuild && (this.options.liveRebuild || forceRebuild)) {
       this.rebuildChunks();
+    }
+  }
+
+  rebuildFishLayers() {
+    for (const chunk of this.chunks.values()) {
+      const previous = chunk.layers.fish;
+      this.disposeChunkObjects(previous);
+      chunk.group.remove(previous);
+      previous.clear();
+      const next = this.fish.createChunkGroup(chunk.cells, this.chunkKey(chunk.chunkX, chunk.chunkZ));
+      chunk.layers.fish = next;
+      chunk.group.add(next);
     }
   }
 
@@ -311,6 +341,8 @@ export class World {
     this.trees.dispose();
     this.water.dispose();
     this.city.dispose();
+    this.island.dispose();
+    this.fish.dispose();
     this.terrain.dispose();
     this.chunkBorderGeometry.dispose();
     this.chunkBorderMaterial.dispose();
